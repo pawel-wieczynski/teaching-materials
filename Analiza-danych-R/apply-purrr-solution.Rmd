@@ -1,0 +1,507 @@
+---
+title: "Analiza danych w języku R"
+output: html_notebook
+---
+
+Spis treści:
+
+1. Przypomnienie składni dla wyrażeń warunkowych, pętli oraz funkcji.
+
+2. Funckje z rodziny **apply** \
+    - funkcja *apply()* dla wierszy oraz dla kolumn \
+    - funkcje *sapply()* oraz *lapply()* (1 x CHALLENGE) \
+    - funkcja *tapply()* dla zmiennych jakościowych (1 x CHALLENGE) \
+    - funkcja *mapply()* dla więcej niż jednej zmiennej.
+
+3. Programowanie funkcjonalne z biblioteką **purrr** \
+    - funkcja *map()* (1 x CHALLENGE) \
+    - funkcja *map2()* \
+    - wykresy *ggplot2* wspomagane funkcją *map()* (1 x CHALLENGE).
+    - inne przydatne funkcje.
+
+[purrr cheatsheet](https://github.com/rstudio/cheatsheets/blob/main/purrr.pdf)
+```{r}
+if(!require('tidyverse')) install.packages('tidyverse')
+library(tidyverse)
+```
+
+```{r}
+dane = read.csv('insurance.csv')
+dane
+```
+
+## Przypomnienie składni dla wyrażeń warunkowych, pętli oraz funkcji
+```{r}
+x = 5
+
+if (x > 0) {
+  cat('x jest liczbą dodatnią')
+}
+
+if (x > 0) cat('x jest liczbą dodatnią')
+```
+
+```{r}
+if (x > 0) {
+  cat('x jest liczbą dodatnią')
+} else if (x < 0) {
+  cat('x jest liczbą ujemną')
+} else {
+  cat('x jest równe 0')
+}
+```
+
+Jeśli element spełnia więcej niż jeden warunek to ewaluacja wyrażenia następuje tylko dla pierwszego z tych warunków. Zatem kilka rad odnośnie wyrażeń warunkowych: \
+ - wyrażenia warunkowe powinny się wzajemnie wykluczać \
+ - jeśli to możliwe, to zaczynamy od najbardziej prawdopodobnych scenariuszy - program będzie wtedy działał szybciej.
+```{r}
+if (x > 3) {
+  cat('x jest większe od 3')
+} else if (x < 10) {
+  cat('x jest mniejsze od 10')
+}
+```
+
+Pętle *for* są wykorzystywane, gdy z góry jesteśmy w stanie określić ilość iteracji. Pętle *while* są wykorzystywane dopóki nie jest osiągnięte jakieś kryterium (nie wiemy przy której iteracji to kryterium zostanie osiągnięte).
+```{r}
+for (i in 1:5) {
+  cat(paste0(i, ', '))
+}
+```
+
+```{r}
+i = 1
+
+while (i <= 5) {
+  cat(paste0(i, ', '))
+  i = i + 1
+}
+```
+
+```{r}
+temp_to_C = function(temp_F) {
+  
+  temp_C = (temp_F - 32) * 5/9
+  
+  return(temp_C)
+  
+}
+
+temp_to_C(90)
+```
+
+```{r}
+suma_liczb_parzystych = function(x) {
+  
+  suma = 0
+  
+  for (i in 1:length(x)) {
+    
+    if (x[i] %% 2 == 0) suma = suma + x[i]
+    
+  }
+  
+  return(suma)
+  
+}
+```
+
+
+```{r}
+wynik_funkcji = suma_liczb_parzystych(c(2,3,6,9,11))
+```
+
+## Funkcje z rodziny *apply*
+
+Funkcje typu *apply* służą do wywołania pojedynczej funkcji dla wielu elementów. Działają analogicznie do zwykłych pętli, ale są szybsze. Wśród analityków posługujących się językiem **R** zwykłe pętle *for/while* są *passé* i lepiej zastępować je funkcjami *apply* tam gdzie to jest możliwe.
+
+### Funkcja *apply()* dla wierszy oraz dla kolumn
+```{r}
+for (i in 1:ncol(dane)) {
+  
+  kolumna = dane %>% pull(i)
+  
+  if (kolumna %>% is.numeric()) {
+    kolumna %>% mean() %>% print()
+  }
+
+}
+```
+
+
+```{r}
+dane %>%
+  select_if(is.numeric) %>%
+  apply(2, suma_liczb_parzystych)
+```
+
+```{r}
+for (i in 1:10) {
+  dane %>% slice(i) %>% paste(collapse = ', ') %>% print()
+}
+```
+
+```{r}
+dane %>%
+  slice(1:10) %>%
+  apply(1, function(x) paste(x, collapse = ', '))
+```
+
+### Funkcje *sapply()* oraz *lapply()*
+```{r}
+dane %>%
+  select_if(is.numeric) %>%
+  sapply(mean)
+```
+
+```{r}
+dane %>%
+  select_if(is.numeric) %>%
+  sapply(function(x) x %>% mean() %>% round())
+```
+
+```{r}
+dane %>%
+  select_if(is.numeric) %>%
+  lapply(function(x) x %>% mean() %>% round())
+```
+
+```{r}
+moja_funkcja = function(x){
+  
+  # Dla każdej kolumny
+    # jeśli jest jakościowa, to zwracamy najczęściej występującą wartość
+    # jeśli jest ilościowa to dzielimy na przedziały i zwracamy najczęściej występujący przedział
+    
+  if (is.character(x) | is.factor(x)) {
+    counts = table(x)
+  } else {
+    counts = table(cut(x, breaks = 5))
+  }
+    
+  return(counts[which.max(counts)])
+    
+}
+  
+```
+
+
+```{r}
+options(scipen = 20)
+options(digits = 10)
+```
+
+```{r}
+lapply(dane, moja_funkcja)
+```
+
+**CHALLENGE 1:** Zmodyfikuj powyższą funkcję, aby: \
+ - zwracała przedziały zależne od rozpiętości danej kolumny \
+ - kolumny ilościowe z małą ilością możliwości traktować jako jakościowe
+```{r}
+# miejsce na kod
+```
+
+### Funkcja *tapply()* dla zmiennych jakościowych
+```{r}
+dane = dane %>%
+  mutate_if(is.character, as.factor)
+```
+
+```{r}
+tapply(
+  X = dane %>% pull(charges)
+  ,INDEX = dane %>% pull(smoker)
+  ,FUN = function(x) round(mean(x), 2)
+  # ,simplify = FALSE
+)
+```
+
+**CHALLENGE 2:** Jaki jest średni koszt ubezpieczenia dla następujących podgrup: kobieta paląca, kobieta niepaląca, mężczyzna palący, mężczyzna niepalący.
+```{r}
+dane = dane %>%
+  mutate(sex_smoker = paste0(sex, ', ', smoker)) 
+
+tapply(dane$charges, dane$sex_smoker, mean)
+ 
+
+
+tapply(
+  X = dane %>% pull(charges)
+  
+  ,INDEX = dane %>% 
+    select(sex, smoker) %>%
+    apply(1, function(x) paste(x, collapse = ', '))
+  
+  ,FUN = mean
+  # ,simplify = FALSE
+)
+```
+
+### Funkcja *mapply()* dla więcej niz jednej zmiennej
+```{r}
+charges_age = mapply(`/` ,dane$charges, dane$age)
+```
+
+## Programowanie funkcjonalne z biblioteką *purrr*
+
+[purrr::map() vs apply()](https://stackoverflow.com/questions/45101045/why-use-purrrmap-instead-of-lapply)
+
+Funkcje z pakietu *purrr*: \
+ - mają bardziej spójną składnię niż funkcje z rodziny *apply* \
+ - są częścią środowiska *tidyverse* \
+ - pozwalają na użycie składni typu *formula* dla funkcji jednorazowych \
+ - wiele dodatkowych funkcji do szybkiej manipulacji listami.
+
+### Funkcja *map()*
+```{r}
+dane %>%
+  select_if(is.numeric) %>%
+  map(mean)
+```
+
+```{r}
+dane %>%
+  select_if(is.numeric) %>%
+  map_dbl(mean)
+```
+
+```{r}
+dane %>%
+  select_if(is.numeric) %>%
+  map_dbl(function(x) x %>% mean() %>% round())
+```
+
+```{r}
+dane %>%
+  select_if(is.numeric) %>%
+  map_dbl(~.x %>% mean() %>% round())
+```
+
+```{r}
+dane %>%
+  mutate(is_parent = map_lgl(children, function(x) x > 0))
+```
+
+```{r}
+dane = dane %>%
+  mutate(rok_urodzenia = 2022 - age)
+```
+
+```{r}
+dane = dane %>%
+  mutate(rok_urodzenia = map_int(age, ~ 2022L - .x))
+```
+
+```{r}
+dane = dane %>%
+  mutate(rok_urodzenia = map_int(age, function(x) 2022L - x))
+```
+
+```{r}
+class(2022L)
+class(2022)
+```
+
+**CHALLENGE 3:** Dodaj rok urodzenia, ale za pomocą funkcji *map()*.
+```{r}
+dane = dane %>%
+  mutate(rok_urodzenia = 2022 - age)
+```
+
+```{r}
+if(!require('broom')) install.packages('broom')
+library(broom)
+```
+
+
+```{r}
+modele = list()
+regiony = unique(dane$region)
+
+for (i in 1:4) {
+  dane %>%
+    filter(region == regiony[i]) %>%
+    lm()
+}
+```
+
+
+```{r}
+dane_model = dane %>%
+  select(!starts_with('rok'), -sex_smoker) %>%
+  # select(age, region, charges) %>%
+  nest(data = -region) %>%
+  mutate(model = map(data, ~lm(charges ~ ., data = .x))) %>%
+  mutate(model = map(model, tidy)) %>%
+  select(-data) %>%
+  unnest(cols = model) %>%
+  mutate(signif = ifelse(p.value < 0.05, 'yes', 'no') %>% as.factor())
+
+dane_model %>%
+  filter(term != '(Intercept)' & term != 'smokeryes') %>%
+  ggplot(aes(x = term, y = estimate)) +
+  geom_point(aes(color = region, size = estimate, shape = signif), position = 'jitter') +
+  theme_bw()
+```
+
+### Funkcja *map2()*
+
+```{r}
+mapply()
+```
+
+
+```{r}
+charges_age = map2_dbl(dane$charges, dane$age, function(x, y) x / y)
+```
+
+```{r}
+charges_age = map2_dbl(dane$charges, dane$age, ~ .x / .y)
+```
+
+```{r}
+prognozy = dane %>%
+  select(-starts_with('rok'), -sex_smoker) %>%
+  nest(data = -region) %>%
+  mutate(model = map(data, ~lm(charges ~., data = .x))) %>%
+  mutate(pred = map2(model, data, predict)) %>%
+  pull(pred)
+```
+
+```{r}
+x = 1:100
+y = 1:100 + rnorm(1:100, 0, 15)
+plot(x, y)
+
+model = lm(y ~ x)
+
+progn = predict(model, list(x))
+
+lines(x, progn, col = 'red')
+```
+
+### Wykresy *ggplot2* wspomagane funkcją *map()*
+
+```{r}
+dane %>%
+  select_if(is.factor) %>%
+  map(function(x) ggplot(dane, aes(x = x)) + 
+        geom_bar(aes(fill = x)) +
+        theme_bw()
+      )
+```
+
+```{r}
+dane %>%
+  select_if(is.factor) %>%
+  map( ~ ggplot(dane, aes(x = .x)) + 
+        geom_bar(aes(fill = .x)) +
+        theme_bw()
+      )
+```
+
+```{r}
+wykresy_slupkowe = function(x, name) {
+  
+  ggplot(dane, aes(x = x)) +
+    geom_bar(aes(fill = x)) +
+    geom_text(stat = 'count', aes(label = ..count..), vjust = 1.5) + 
+    labs(x = '', title = paste0('Wykres słupkowy zmiennej ', name)) +
+    theme_bw() +
+    theme(legend.position = 'none')
+}
+
+dane %>%
+  select_if(is.factor) %>%
+  map2(.y = names(.), ~ wykresy_slupkowe(.x, .y)
+)
+dane %>%
+  select_if(is.factor) %>%
+  map2(.y = names(.), function(x, y) wykresy_slupkowe(x, y))
+```
+
+**CHALLENGE 4:** Za pomocą funkcji map wyświetl histogramy oraz gęstości empiryczne zmiennych ilościowych.
+```{r}
+ggplot(dane, aes(charges)) +
+  geom_histogram(color = 'black', fill = 'lightblue') +
+  labs(x = '', title = paste0('Wykres słupkowy zmiennej ')) +
+  theme_bw()
+```
+
+
+
+```{r}
+wykresy_histogram = function(x, name) {
+  
+  ggplot(dane, aes(x)) +
+  geom_histogram(aes(y = ..density..), color = 'black', fill = 'lightblue') +
+    geom_density(size = 1, color = 'blue') +
+  labs(x = '', title = paste0('Wykres słupkowy zmiennej ', name)) +
+  theme_bw()
+}
+
+
+```
+
+```{r}
+dane %>%
+  select_if(is.numeric) %>%
+  map2(.y = names(.), ~ wykresy_histogram(.x, .y)
+)
+```
+
+
+### Inne przydatne funkcje
+
+Czasami dostajemy dane, gdzie nazwy kolumn są CAPS LOCKIEM, a my tego nie chcemy (np. dla lepszej estetyki wykresów).
+```{r}
+set_names(dane, toupper) %>%
+  set_names(tolower)
+```
+
+
+```{r}
+dane %>%
+  mutate(age = modify(age, ~. + 2L))
+```
+
+Szybkie sprawdzanie typów kolumn przy dużych zbiorach danych - gdy mamy pewne oczekiwania co do tych typów kolumn. Na przykład mamy dane ankietowe, gdzie odpowiadano na skali od 1 do 10. Oczekujemy zatem, że kolumny (od pewnego miejsca) będą typu *numeric* albo *integer*.
+```{r}
+every(dane, is.numeric)
+some(dane, is.numeric)
+none(dane, is.character)
+```
+
+```{r}
+map_int(dane$age, ~ 2022L - .x) %>%
+  reduce(mean)
+```
+
+
+
+```{r}
+set.seed(2137)
+zwierzeta = c('słoń', 'żyrafa', 'żółw', 'pies', 'kot', 'mysz', 'jeleń', 'pingwin')
+
+zbior_1 = sample(zwierzeta, 8, replace = TRUE)
+zbior_2 = sample(zwierzeta, 8, replace = TRUE)
+zbior_3 = sample(zwierzeta, 8, replace = TRUE)
+
+zbior_1[1] = 'Żyrafa'
+lista_zbiorow = list(zbior_1, zbior_2, zbior_3)
+
+zbior_1 = map_chr(zbior_1, tolower)
+
+intersect(zbior_1, zbior_2, zbior_3)
+intersect(zbior_1, intersect(zbior_2, zbior_3))
+reduce(lista_zbiorow, intersect)
+
+accumulate(lista_zbiorow, setdiff)
+```
+
+```{r}
+keep(lista_zbiorow, ~ any('żyrafa' %in% .x))
+discard(lista_zbiorow, ~ any('kot' %in% .x))
+flatten_chr(lista_zbiorow)
+```

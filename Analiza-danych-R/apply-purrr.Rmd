@@ -1,0 +1,142 @@
+---
+title: "Analiza danych w języku R"
+output: html_notebook
+---
+
+Spis treści:
+
+1. Przypomnienie składni dla wyrażeń warunkowych, pętli oraz funkcji.
+
+2. Funckje z rodziny **apply** \
+    - funkcja *apply()* dla wierszy oraz dla kolumn \
+    - funkcje *sapply()* oraz *lapply()* (1 x CHALLENGE) \
+    - funkcja *tapply()* dla zmiennych jakościowych (1 x CHALLENGE) \
+    - funkcja *mapply()* dla więcej niż jednej zmiennej.
+
+3. Programowanie funkcjonalne z biblioteką **purrr** \
+    - funkcja *map()* (1 x CHALLENGE) \
+    - funkcja *map2()* \
+    - wykresy *ggplot2* wspomagane funkcją *map()* (1 x CHALLENGE).
+    - inne przydatne funkcje.
+
+[purrr cheatsheet](https://github.com/rstudio/cheatsheets/blob/main/purrr.pdf)
+```{r}
+if(!require('tidyverse')) install.packages('tidyverse')
+library(tidyverse)
+```
+
+```{r}
+dane = read.csv('insurance.csv')
+dane
+```
+
+## Przypomnienie składni dla wyrażeń warunkowych, pętli oraz funkcji
+```{r}
+
+```
+
+Jeśli element spełnia więcej niż jeden warunek to ewaluacja wyrażenia następuje tylko dla pierwszego z tych warunków. Zatem kilka rad odnośnie wyrażeń warunkowych: \
+ - wyrażenia warunkowe powinny się wzajemnie wykluczać \
+ - jeśli to możliwe, to zaczynamy od najbardziej prawdopodobnych scenariuszy - program będzie wtedy działał szybciej.
+```{r}
+
+```
+
+Pętle *for* są wykorzystywane, gdy z góry jesteśmy w stanie określić ilość iteracji. Pętle *while* są wykorzystywane dopóki nie jest osiągnięte jakieś kryterium (nie wiemy przy której iteracji to kryterium zostanie osiągnięte).
+```{r}
+
+```
+
+## Funkcje z rodziny *apply*
+
+Funkcje typu *apply* służą do wywołania pojedynczej funkcji dla wielu elementów. Działają analogicznie do zwykłych pętli, ale są szybsze. Wśród analityków posługujących się językiem **R** zwykłe pętle *for/while* są *passé* i lepiej zastępować je funkcjami *apply* tam gdzie to jest możliwe.
+
+### Funkcja *apply()* dla wierszy oraz dla kolumn
+```{r}
+
+```
+
+### Funkcje *sapply()* oraz *lapply()*
+```{r}
+
+```
+
+**CHALLENGE 1:** Zmodyfikuj powyższą funkcję, aby: \
+ - zwracała przedziały zależne od rozpiętości danej kolumny \
+ - kolumny ilościowe z małą ilością możliwości traktować jako jakościowe
+```{r}
+# miejsce na kod
+```
+
+### Funkcja *tapply()* dla zmiennych jakościowych
+```{r}
+
+```
+
+**CHALLENGE 2:** Jaki jest średni koszt ubezpieczenia dla następujących podgrup: kobieta paląca, kobieta niepaląca, mężczyzna palący, mężczyzna niepalący.
+```{r}
+
+```
+
+### Funkcja *mapply()* dla więcej niz jednej zmiennej
+```{r}
+```
+
+## Programowanie funkcjonalne z biblioteką *purrr*
+
+[purrr::map() vs apply()](https://stackoverflow.com/questions/45101045/why-use-purrrmap-instead-of-lapply)
+
+Funkcje z pakietu *purrr*: \
+ - mają bardziej spójną składnię niż funkcje z rodziny *apply* \
+ - są częścią środowiska *tidyverse* \
+ - pozwalają na użycie składni typu *formula* dla funkcji jednorazowych \
+ - wiele dodatkowych funkcji do szybkiej manipulacji listami.
+
+### Funkcja *map()*
+```{r}
+
+```
+
+**CHALLENGE 3:** Dodaj rok urodzenia, ale za pomocą funkcji *map()*.
+```{r}
+
+```
+
+```{r}
+if(!require('broom')) install.packages('broom')
+library(broom)
+```
+
+```{r}
+
+```
+
+### Funkcja *map2()*
+
+```{r}
+
+```
+
+### Wykresy *ggplot2* wspomagane funkcją *map()*
+
+```{r}
+
+```
+
+**CHALLENGE 4:** Za pomocą funkcji map wyświetl histogramy oraz gęstości empiryczne zmiennych ilościowych.
+```{r}
+
+```
+
+### Inne przydatne funkcje
+
+Czasami dostajemy dane, gdzie nazwy kolumn są CAPS LOCKIEM, a my tego nie chcemy (np. dla lepszej estetyki wykresów).
+```{r}
+
+```
+
+Szybkie sprawdzanie typów kolumn przy dużych zbiorach danych - gdy mamy pewne oczekiwania co do tych typów kolumn. Na przykład mamy dane ankietowe, gdzie odpowiadano na skali od 1 do 10. Oczekujemy zatem, że kolumny (od pewnego miejsca) będą typu *numeric* albo *integer*.
+
+```{r}
+
+```
