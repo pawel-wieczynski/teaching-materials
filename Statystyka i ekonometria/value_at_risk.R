@@ -37,7 +37,7 @@ for (i in seq_along(returns)) {
   }
 }
 
-VaR_EWMA = qnorm(alpha) * tail(sqrt(var_ewma), 1)
+VaR_EWMA = qt(alpha, df) * tail(sqrt(var_ewma), 1)
 
 # GARCH model ----
 spec = ugarchspec(
@@ -47,15 +47,28 @@ spec = ugarchspec(
 )
 
 fit = ugarchfit(spec, returns)
-VaR_GARCH = qnorm(alpha) * tail(as.numeric(sigma(fit)), 1)
+VaR_GARCH = qt(alpha, df) * tail(as.numeric(sigma(fit)), 1)
+
+# Visualize results ----
+var_data = data.frame(
+  Method = c('Historical', 'Parametrical (normal)', 'Parametrical (t)', 'Simulated (t)', 'EWMA', 'GARCH')
+  ,VaR = c(VaR_historical, VaR_parametric_normal, VaR_parametric_t, VaR_simulated_t, VaR_EWMA, VaR_GARCH)
+)
+
+ggplot(data.frame(returns = returns), aes(x = returns)) +
+  geom_density(fill = 'blue', alpha = 0.4) +
+  geom_vline(data = var_data, aes(xintercept = VaR, color = Method), linetype = 'dashed', size = 1) +
+  guides(color = guide_legend(override.aes = list(linetype = 'solid', shape = 15))) +
+  theme_bw() +
+  theme(legend.position = c(0.2, 0.8), legend.background = element_blank())
 
 # VaR vs different alpha levels ----
 alpha_levels = seq(0.001, 0.1, length.out = 1000)
 VaR_historical = sapply(alpha_levels, function(p) quantile(returns, p, names = FALSE))
 VaR_parametric_normal = sapply(alpha_levels, function(p) qnorm(p, mu, sigma))
 VaR_parametric_t = sapply(alpha_levels, function(p) mu + sigma * qt(p, df))
-VaR_EWMA = sapply(alpha_levels, function(p) qnorm(p) * tail(sqrt(var_ewma), 1))
-VaR_GARCH = sapply(alpha_levels, function(p) qnorm(p) * tail(as.numeric(sigma(fit)), 1))
+VaR_EWMA = sapply(alpha_levels, function(p) qt(p, df) * tail(sqrt(var_ewma), 1))
+VaR_GARCH = sapply(alpha_levels, function(p) qt(p, df) * tail(as.numeric(sigma(fit)), 1))
 
 plot_data = data.frame(
   Alpha = rep(alpha_levels, 5)
@@ -64,6 +77,7 @@ plot_data = data.frame(
 )
 
 ggplot(plot_data, aes(x = Alpha, y = VaR, color = Method)) +
-  geom_line(size = 0.75) +
+  geom_line(size = 1) +
   labs(x = 'Alpha level', y = 'VaR', color = 'Method') +
-  theme(legend.position = 'top')
+  theme_bw() +
+  theme(legend.position = c(0.8, 0.2), legend.background = element_blank())
