@@ -1,8 +1,22 @@
 if(!require('pacman')) install.packages('pacman')
 pacman::p_load(tidyverse)
+theme_set(theme_bw())
 
 df = read.csv('datasets\\stock_data.csv') %>%
   mutate(Data = as.Date(Data))
+
+# Vizualize close prices
+df %>%
+  pivot_longer(
+    cols = 2:5
+    ,names_to = 'Asset'
+    ,values_to = 'Close Price'
+  ) %>%
+  ggplot(aes(x = Data, y = `Close Price`)) +
+  geom_line(aes(color = Asset), linewidth = 0.8) +
+  facet_wrap(vars(Asset), scales = 'free') +
+  theme(legend.position = 'none') +
+  labs(y = '', x = '', title = 'Close prices of assets')
 
 # Calculate daily log returns
 returns_df = sapply(
@@ -75,4 +89,4 @@ ggplot(portfolio_metrics, aes(x = volatility, y = returns, color = sharpe)) +
              ,color = 'red', size = 5, shape = 17) +
   xlim(0.15, 0.40) +
   theme_bw() +
-  theme(legend.position = c(0.8, 0.5))
+  theme(legend.position = c(0.8, 0.5), legend.background = element_blank())
