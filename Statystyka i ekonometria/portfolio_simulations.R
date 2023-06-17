@@ -41,11 +41,18 @@ weights = matrix(nrow = num_of_portfolios, ncol = ncol(returns_df))
 portfolio_metrics = data.frame(
   returns = rep(0, num_of_portfolios)
   , volatility = rep(0, num_of_portfolios)
-  , sharpe = rep(0, num_of_portfolios)
+  , sharpe_volatility = rep(0, num_of_portfolios)
+  , var = rep(0, num_of_portfolios)
+  , sharpe_var = rep(0, num_of_portfolios)
+  , cvar = rep(0, num_of_portfolios)
+  , sharpe_cvar = rep(0, num_of_portfolios)
 )
 
 # Set seed for reproducibility
 set.seed(2137)
+
+# Alpha level for Value-at-Risk measures
+alpha = 0.05
 
 # Simulate portfolios
 for (i in 1:num_of_portfolios) {
@@ -54,39 +61,99 @@ for (i in 1:num_of_portfolios) {
   random_weights = random_weights / sum(random_weights)
   weights[i, ] = random_weights
   
+  portfolio_returns = as.numeric(as.matrix(returns_df) %*% random_weights)
+  
   portfolio_metrics$returns[i] = random_weights %*% returns_mean
   portfolio_metrics$volatility[i] = sqrt(t(random_weights) %*% (returns_cov %*% random_weights))
-  portfolio_metrics$sharpe[i] = (portfolio_metrics$returns[i] - risk_free) / portfolio_metrics$volatility[i]
+  portfolio_metrics$sharpe_volatility[i] = (portfolio_metrics$returns[i] - risk_free) / portfolio_metrics$volatility[i]
+  
+  portfolio_metrics$var[i] = -quantile(portfolio_returns, alpha)
+  portfolio_metrics$sharpe_var[i] = (portfolio_metrics$returns[i] - risk_free) / portfolio_metrics$var[i]
+  
+  cvar_indicator = portfolio_returns < -portfolio_metrics$var[i]
+  portfolio_metrics$cvar[i] = -sum(portfolio_returns * cvar_indicator) / sum(cvar_indicator)
+  portfolio_metrics$sharpe_cvar[i] = (portfolio_metrics$returns[i] - risk_free) / portfolio_metrics$cvar[i]
   
 }
 
-# Find optimal portfolios: min variance and max Sharpe ratio
+# Find optimal portfolios: min variance and max sharpe_volatility ratio
 optimal_portfolios = data.frame(
-  Min_Variance = c(
+  Min_Volatility = c(
     round(100 * weights[which.min(portfolio_metrics$volatility),], 2)
     ,round(100 * portfolio_metrics[which.min(portfolio_metrics$volatility), ], 2) %>% as.numeric()
   )
-  ,Max_Sharpe = c(
-    round(100 * weights[which.max(portfolio_metrics$sharpe),], 2)
-    ,round(100 * portfolio_metrics[which.max(portfolio_metrics$sharpe), ], 2) %>% as.numeric()
+  ,Max_Sharpe_volatility = c(
+    round(100 * weights[which.max(portfolio_metrics$sharpe_volatility),], 2)
+    ,round(100 * portfolio_metrics[which.max(portfolio_metrics$sharpe_volatility), ], 2) %>% as.numeric()
+  )
+  ,Min_VaR = c(
+    round(100*weights[which.min(portfolio_metrics$var),], 2)
+    ,round(100*portfolio_metrics[which.min(portfolio_metrics$var), ], 2) %>% as.numeric()
+  )
+  ,Max_Sharpe_VaR = c(
+    round(100*weights[which.max(portfolio_metrics$sharpe_var),], 2)
+    ,round(100*portfolio_metrics[which.max(portfolio_metrics$sharpe_var), ], 2) %>% as.numeric()
+  )
+  ,Min_cVaR = c(
+    round(100*weights[which.min(portfolio_metrics$cvar),], 2)
+    ,round(100*portfolio_metrics[which.min(portfolio_metrics$cvar), ], 2) %>% as.numeric()
+  )
+  ,Max_Sharpe_cVaR = c(
+    round(100*weights[which.max(portfolio_metrics$sharpe_cvar),], 2)
+    ,round(100*portfolio_metrics[which.max(portfolio_metrics$sharpe_cvar), ], 2) %>% as.numeric()
   )
 ) %>% t() %>% as.data.frame()
 
 # Set column names for the output
-colnames(optimal_portfolios) = c(colnames(returns_df), 'Expected Return', 'Standard Deviation', 'Sharpe Ratio')
+colnames(optimal_portfolios) = c(
+  colnames(returns_df), 'Expected Return'
+  , 'Volatility', 'Sharpe Ratio (Volatility)'
+  , 'Value-at-Risk', 'Sharpe Ratio (Value-at-Risk)'
+  , 'Expected Shortfall', 'Sharpe Ratio (Expected Shortfall)'
+)
 
 # Display optimal portfolios
 optimal_portfolios
 
 # Visualize optimal portfolios
-ggplot(portfolio_metrics, aes(x = volatility, y = returns, color = sharpe)) +
+# Risk measured by volatility (standard deviation)
+ggplot(portfolio_metrics, aes(x = volatility, y = returns, color = sharpe_volatility)) +
   geom_point() +
-  geom_point(aes(x = (optimal_portfolios$`Standard Deviation`[1] / 100)
+  geom_point(aes(x = (optimal_portfolios$`Volatility`[1] / 100)
                  ,y = (optimal_portfolios$`Expected Return`)[1] / 100)
              ,color = 'black', size = 5, shape = 17) +
-  geom_point(aes(x = (optimal_portfolios$`Standard Deviation`[2] / 100)
+  geom_point(aes(x = (optimal_portfolios$`Volatility`[2] / 100)
                  ,y = (optimal_portfolios$`Expected Return`)[2] / 100)
              ,color = 'red', size = 5, shape = 17) +
-  xlim(0.15, 0.40) +
+  # xlim(0.15, 0.40) +
   theme_bw() +
   theme(legend.position = c(0.8, 0.5), legend.background = element_blank())
+
+# Risk measured by Value-at-Risk
+ggplot(portfolio_metrics, aes(x = var, y = returns, color = sharpe_var)) +
+  geom_point() +
+  geom_point(aes(x = (optimal_portfolios$`Value-at-Risk`[1] / 100)
+                 ,y = (optimal_portfolios$`Expected Return`)[1] / 100)
+             ,color = 'black', size = 5, shape = 17) +
+  geom_point(aes(x = (optimal_portfolios$`Value-at-Risk`[2] / 100)
+                 ,y = (optimal_portfolios$`Expected Return`)[2] / 100)
+             ,color = 'red', size = 5, shape = 17) +
+  # xlim(0, 0.040) +
+  theme_bw() +
+  theme(legend.position = c(0.8, 0.5), legend.background = element_blank())
+
+# Risk measured by Expected Shortfall
+ggplot(portfolio_metrics, aes(x = cvar, y = returns, color = sharpe_cvar)) +
+  geom_point() +
+  geom_point(aes(x = (optimal_portfolios$`Expected Shortfall`[1] / 100)
+                 ,y = (optimal_portfolios$`Expected Return`)[1] / 100)
+             ,color = 'black', size = 5, shape = 17) +
+  geom_point(aes(x = (optimal_portfolios$`Expected Shortfall`[2] / 100)
+                 ,y = (optimal_portfolios$`Expected Return`)[2] / 100)
+             ,color = 'red', size = 5, shape = 17) +
+  # xlim(0, 0.050) +
+  theme_bw() +
+  theme(legend.position = c(0.8, 0.5), legend.background = element_blank())
+
+
+
