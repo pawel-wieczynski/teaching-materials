@@ -29,6 +29,23 @@ returns_mean = (colMeans(returns_df) + 1)^252 - 1
 returns_cov = cov(returns_df) * 252
 returns_sd = diag(returns_cov) %>% sqrt()
 
+# Alpha level for Value-at-Risk measures
+alpha = 0.05
+
+# Calculate VaR and ES for particulat assets
+returns_var = sapply(returns_df, quantile, probs = alpha)
+returns_cvar = sapply(1:ncol(returns_df), function(i) {
+  # Getting the returns of asset i
+  asset_returns = returns_df[, i]
+  # Getting VaR for asset i
+  asset_var = returns_var[i]
+  # Logical vector indicating which returns are below -VaR
+  cvar_indicator = asset_returns < asset_var
+  # Calculating CVaR (Expected Shortfall)
+  cvar = sum(asset_returns * cvar_indicator) / sum(cvar_indicator)
+  return(cvar)
+})
+
 # Set the annual risk-free rate
 risk_free = 0.05
 
@@ -50,9 +67,6 @@ portfolio_metrics = data.frame(
 
 # Set seed for reproducibility
 set.seed(2137)
-
-# Alpha level for Value-at-Risk measures
-alpha = 0.05
 
 # Simulate portfolios
 for (i in 1:num_of_portfolios) {
@@ -151,9 +165,6 @@ ggplot(portfolio_metrics, aes(x = cvar, y = returns, color = sharpe_cvar)) +
   geom_point(aes(x = (optimal_portfolios$`Expected Shortfall`[2] / 100)
                  ,y = (optimal_portfolios$`Expected Return`)[2] / 100)
              ,color = 'red', size = 5, shape = 17) +
-  # xlim(0, 0.050) +
+  # xlim(0, 0.050)
   theme_bw() +
   theme(legend.position = c(0.8, 0.5), legend.background = element_blank())
-
-
-
