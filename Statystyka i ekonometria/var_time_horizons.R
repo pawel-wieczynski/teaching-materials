@@ -38,8 +38,8 @@ var.test(
 
 # Plot densities ----
 source('https://raw.githubusercontent.com/pawel-wieczynski/useful-functions/main/histogram_with_densities.R')
-histogram_with_densities(df_daily, 'Returns')
-histogram_with_densities(df_weekly, 'Returns')
+histogram_with_densities(df_daily, 'Returns', 'Daily returns of Dino Polska', 50)
+histogram_with_densities(df_weekly, 'Returns', 'Weekly returns of Dino Polska', 30)
 
 # Fit normal distribution ----
 m_daily = mean(df_daily$Returns)
@@ -72,7 +72,7 @@ VaR_MC = quantile(simulated_weekly_returns, alpha)
 
 # Plot results
 ggplot(df_weekly, aes(Returns)) + 
-  geom_histogram(fill = 'steelblue', color = 'white', bins = 50) +
+  geom_histogram(fill = 'steelblue', color = 'white', bins = 30) +
   geom_vline(aes(color = 'VaR from weekly returns', xintercept = VaR_weekly), size = 1) +
   geom_vline(aes(color = 'Square root of time', xintercept = VaR_daily_H), size = 1) +
   geom_vline(aes(color = 'Monte Carlo', xintercept = VaR_MC), size = 1) +
