@@ -99,17 +99,17 @@ for (h in H) {
 
 VaR_year_df = tibble(
   H = H
-  , 'Pierwiastek kwadratowy z czasu' = -100 * VaR_year
-  , 'Symulacje Monte Carlo' = -100 * VaR_year_MC
+  , 'Square root of time' = -100 * VaR_year
+  , 'Monte Carlo' = -100 * VaR_year_MC
 )
 
 VaR_year_df %>%
   pivot_longer(
     cols = 2:3
-    , names_to = 'Metoda'
+    , names_to = 'Method'
     , values_to = 'Value-at-Risk'
   ) %>%
   ggplot(aes(x = H, y = `Value-at-Risk`)) +
   geom_line(aes(color = Metoda), size = 1) +
   theme(legend.position = c(0.2, 0.8), legend.background = element_blank()) +
-  labs(title = '5% Value-at-Risk dla różnych horyzontów czasowych')
+  labs(title = '5% Value-at-Risk for different time horizons')
