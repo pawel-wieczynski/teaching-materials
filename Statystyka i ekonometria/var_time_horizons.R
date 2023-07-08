@@ -88,13 +88,10 @@ VaR_year_MC = c()
 
 set.seed(2137)
 for (h in H) {
-  simulated_returns = c()
-  for (i in 1:N) {
-    returns = rnorm(h, m_daily, sd_daily)
-    cum_return = sum(returns)
-    simulated_returns = c(simulated_returns, cum_return)
-  }
+  simulated_returns = matrix(rnorm(N*h, m_daily, sd_daily), nrow = N)
+  simulated_returns = apply(simulated_returns, 1, function(x) cumsum(x)[h])
   VaR_year_MC[h] = quantile(simulated_returns, alpha)
+  cat(h, '\n')
 }
 
 VaR_year_df = tibble(
@@ -110,6 +107,6 @@ VaR_year_df %>%
     , values_to = 'Value-at-Risk'
   ) %>%
   ggplot(aes(x = H, y = `Value-at-Risk`)) +
-  geom_line(aes(color = Metoda), size = 1) +
+  geom_line(aes(color = Method), size = 1) +
   theme(legend.position = c(0.2, 0.8), legend.background = element_blank()) +
   labs(title = '5% Value-at-Risk for different time horizons')
