@@ -1,31 +1,31 @@
-# Podstawowe typy zmiennych ----
+# Basic data types ----
 
-# Podstawowe operacje matematyczne ----
+# Basic math operations ----
 
-# Wektory ----
+# Vectors ----
 
-# Operacje na wektorach ----
+# Vector operations ----
 
-# Operatory logiczne ----
+# Logical operators ----
 
-# Wyrażenia logiczne ----
+# Logical expressions ----
 
-# Podzbiory wektora ----
+# Subsetting vectors ----
 
-# Kilka podstawowych funkcji ----
+# Useful basic functions ----
 
-# Ramki danych ----
+# Data frames ----
 
-# Listy ----
+# Lists ----
 
-# Faktory ----
+# Factors ----
 
-# Konwersja typów zmiennych ----
+# Converting data types ----
 
-# Pętle ----
+# Loops ----
 
-# Wyrażenia warunkowe ----
+# Conditional statements ----
 
-# Funkcje z rodziny apply ----
+# Apply functions ----
 
-# Funkcje ----
+# Defining custom functions ----
