@@ -5,19 +5,32 @@ format: html
 editor: visual
 ---
 
-## Quarto
-
 ```{r}
 library(tidyverse)
 library(broom)
+library(car)
+library(caret)
 ```
 
 ## Regresja liniowa
 
 ### Przykład z jedną zmienną objaśniającą
 
+#### Krok 1: Przygotowanie danych
+
+-   wczytujemy dane
+
+-   sprawdzamy strukturę danych, podstawowe statystyki opisowe
+
+-   sprawdzamy dane wizualnie za pomocą wykresów
+
+-   modyfikacja zmiennych, dodanie nowych zmiennych
+
+-   podział danych na zbiór uczący, zbiór testowy, zbiór walidacyjny (pominiemy w tym przykładzie).
+
 ```{r}
 data(cars)
+str(cars)
 summary(cars)
 ```
 
@@ -41,10 +54,44 @@ cars %>%
   theme(legend.position = 'none')
 ```
 
+#### Krok 2: Trenowanie modelu
+
+Równanie regresji liniowej ma postać:
+
+$$ y_i = \alpha + \beta \ x_i + \epsilon_i $$
+
+dla $i = 1, 2, \dots, n$ gdzie:
+
+-   $y_i$ nazywamy zmienną zależną / zmienną objaśnianą / zmienną celu
+
+-   $x_i$ nazywamy zmienną niezależną / zmienną objaśniającą / regresorem
+
+-   $\alpha, \beta$ to parametry regresji, które chcemy oszacować
+
+-   $\epsilon_i$ to składnik losowy / reszty modelu, czyli różnice między wartościami obserwacji $y_i$ a wartościami prognozowanymi przez model $\widehat{y_i}$.
+
+Spośród wszystkich możliwych kombinacji $\alpha, \beta$ wybieramy takie $\widehat{\alpha}, \widehat{\beta}$, które minimalizują sumę kwadratów reszt, tzn.
+
+$$ \sum_{i=1}^n \epsilon_i^2 = \sum{i=1}^n \left( y_i - \widehat{y} \right)^2 \ \longrightarrow \ \min $$ Jest to tzw. **metoda najmniejszych kwadratów** (ang. metoda OLS).
+
 ```{r}
 model_1 = lm(dist ~ speed, data = cars)
 model_2 = lm(dist ~ I(speed^2), data = cars)
 ```
+
+#### Krok 3: Ocena modelu
+
+Za pomocą funkcji *summary()* wyświetlamy podsumowanie modelu. Elementy, na które warto zwrócić uwagę, to:
+
+-   *Estimate* - oszacowania współczynników regresji $\widehat{\alpha}, \widehat{\beta}$
+
+-   *Pr(\>\|t\|)* - wartości *p-value* oznaczające czy dane współczynniki regresji są istotne statystycznie; na ogół przyjmujemy, że współczynniki są istotne, jeżeli *p-value* jest mniejsze od $0.05$
+
+-   *F-statistic* - test sprawdzający, czy model jako całość jest istotny statystycznie; na ogół przyjmujemy, że model jest istotny, jeśli *p-value* odpowiadająca temu testowi jest mniejsza od $0.05$
+
+-   *Multiple R-squared* - współczynnik determinancji $R^2$ oznacza jaki odsetek zmienności zmiennej zależnej został wyjaśniony przez ten model. Wartość $R^2$ przyjmuje wartości od $0$ do $1$, przy czym im większa wartość, tym lepiej dopasowany model.
+
+-   *Adjusted R-squared* - skorygowany $R^2$ nakłada dodatkową penalizację na ilość zmiennych w modelu.
 
 ```{r}
 summary(model_1)
@@ -58,6 +105,41 @@ ggplot(cars, aes(x = speed, y = dist)) +
   geom_smooth(formula = 'y ~ I(x^2)', method = 'lm', se = FALSE, color = 'red')
 ```
 
+Aby progznowanie na podstawie tego modelu było wiarygodne, musi być spełnione kilka założeń:
+
+-   istnieje liniowa zależność między zmienną celu a regresorami
+
+-   reszty modelu mają rozkład normalny
+
+-   reszty modelu mają jednakową wariancję (są homoskedastyczne)
+
+-   reszty modelu nie wykazują autokorelacji
+
+-   w zbiorze danych nie ma obserwacji odstających (ang. *outliers*, *influential values*)
+
+-   zmienne objaśniającę nie są idealnie skorelowane między sobą (w przypadku modelu z więcej niż jednym regresorem).
+
+```{r}
+# par(mfrow = c(2,2))
+plot(model_1)
+plot(model_2)
+```
+
+```{r}
+shapiro.test(model_1$residuals)
+shapiro.test(model_2$residuals)
+```
+
+```{r}
+ncvTest(model_1)
+ncvTest(model_2)
+```
+
+```{r}
+Box.test(model_1$residuals)
+Box.test(model_2$residuals)
+```
+
 ```{r}
 cars_model_1 = augment(model_1)
 cars_model_2 = augment(model_2)
@@ -69,8 +151,46 @@ ggplot(cars_model_2, aes(.resid)) +
   geom_histogram(color = 'white', bins = 10)
 ```
 
+#### Krok 4: Prognozowanie
+
 ```{r}
 new_data = data.frame(speed = c(30, 50, 80))
 predict(model_1, newdata = new_data)
 predict(model_2, newdata = new_data)
+```
+
+Do oceny jakości prognoz mamy wiele różnych miar. Najpopularniejsze z nich to:
+
+-   Współczynnik $R^2$, który możemy policzyć również jako kwadrat korelacji między $y$ oraz $\widehat{y}$
+
+-   Pierwiastek z błędu średniokwadratowego (ang. *RMSE*)
+
+    $$ \text{RMSE} = \sqrt{ \frac{1}{n} \sum_{i=1}^n \left( y_i - \widehat{y_i} \right)^2  } $$
+
+-   Średni błąd absolutny (ang. *MAE*)
+
+    $$ \text{MAE} = \frac{1}{n} \sum_{i=1}^n \left| y_i - \widehat{y_i} \right|$$
+
+```{r}
+y = cars$dist
+y_hat = model_2$fitted.values
+n = nrow(cars)
+
+cor(y, y_hat)^2
+sqrt(sum((y - y_hat)^2) / n)
+sum(abs(y - y_hat)) / n
+
+caret::R2(y_hat, y)
+caret::RMSE(y_hat, y)
+caret::MAE(y_hat, y)
+```
+
+Jeśli mamy kilka modeli, to przy wyborze ostatecznego modelu mogą pomóc **kryteria informacyjne**. Najpopularniejsze z nich to AIC oraz BIC. Im mniejsza wartość, tym lepszy model.
+
+```{r}
+AIC(model_1)
+AIC(model_2)
+
+BIC(model_1)
+BIC(model_2)
 ```
