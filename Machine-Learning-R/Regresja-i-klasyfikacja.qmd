@@ -9,7 +9,10 @@ editor: visual
 library(tidyverse)
 library(broom)
 library(car)
+library(GGally)
 library(caret)
+library(ISLR)
+options(scipen = 20)
 ```
 
 ## Regresja liniowa
@@ -194,3 +197,174 @@ AIC(model_2)
 BIC(model_1)
 BIC(model_2)
 ```
+
+### Przykład z wieloma zmiennymi objaśniającymi
+
+Równanie regresji rozszerzamy o dodatkowe zmienne $x$ oraz dodatkowe parametry $\beta$, które musimy oszacować:
+
+$$
+y_i = \beta_0 + \beta_1 \ x_{i1} + \dots + \beta_k x_{ik} + \epsilon_i
+$$
+
+```{r}
+df = read.csv(
+  'data\\insurance.csv'
+  , stringsAsFactors = TRUE
+)
+```
+
+```{r}
+GGally::ggpairs(df, progress = FALSE)
+
+df %>%
+  select_if(is.numeric) %>%
+  GGally::ggpairs(progress = FALSE)
+```
+
+```{r}
+model_1 = lm(charges ~ ., data = df)
+summary(model_1)
+```
+
+```{r}
+model_2 = step(model_1)
+summary(model_2)
+```
+
+## Regresja logistyczna
+
+W tym wypadku zmienna celu jest binarna, tzn. przyjmuje wartości 0 lub 1. Oznaczmy $p_i \in \left[ 0,1 \right]$ jako prawdopodobieństwo, że $y_i =1$. Równanie zwane **modelem logitowym** ma postać::
+
+$$
+\ln \left( \frac{p_i}{1-p_i} \right) = \beta_0 + \beta_1  x_{i1} + \dots \beta_k x_{ik} + \epsilon
+$$
+
+#### Krok 1: Przygotowanie danych
+
+```{r}
+data(Default)
+```
+
+```{r}
+table(Default$default)
+```
+
+Problem niezbalansowania zmiennych - modele predykcyjne mogą być obciążone w kierunku liczniejszej klasy, tzw. *Acurracy paradox*. Kilka metod na obejście tego problemu:
+
+-   *undersampling* - ryzyko utraty informacji z pominiętych obserwacji
+
+-   *oversampling* - ryzyko przetrenowania, utrata niezależności zbioru treningowego oraz zbioru testowego
+
+-   *rose* - nowe obserwacje są generowane z warunkowego KDE obu klas.
+
+```{r}
+df = caret::downSample(
+  x = Default %>% select(-default)
+  , y = Default %>% pull(default)
+  , yname = 'default'
+)
+```
+
+```{r}
+GGally::ggpairs(
+  df
+  , progress = FALSE
+  , mapping = aes(fill = default, color = default)
+)
+```
+
+#### Krok 2: Trenowanie modelu
+
+```{r}
+model_log = glm(
+  default ~ .
+  , data = df
+  , family = binomial(link = 'logit')
+)
+```
+
+#### Krok 3: Ocena modelu
+
+Funkcja `glm` w przypadku regresji logitycznej podaje współczynniki dla *non-reference level* danego faktora, w tym wypadku będzie to odpowiedź *Yes*.
+
+```{r}
+summary(model_log)
+```
+
+#### Krok 4: Prognozowanie
+
+```{r}
+new_data = data.frame(
+  student = 'No'
+  , balance = 1000
+  , income = 24000
+)
+
+predict(model_log, newdata = new_data, type = 'response')
+```
+
+Zarówno `fitted.values` jak i wynik funkcji `predict` jest wartością z przedziału $[0,1]$, zatem musimy ustalić jakiś próg, aby zaklasyfikować prognozy do odpowiednich kategorii.
+
+```{r}
+y = df$default
+y_hat_prob = model_log$fitted.values %>% unname()
+hist(y_hat_prob)
+
+y_hat = ifelse(y_hat_prob > 0.5, 'Yes', 'No') %>%
+  as.factor()
+
+levels(y) == levels(y_hat)
+```
+
+**Macierz kontyngencji** podaje nam łączny rozkład zmiennej $y$ oraz prognoz $\widehat{y}$. Poszczególne elementy tej macierzy nazywamy następująco:
+
+-   TP - *true positive* (1,1)
+
+-   FN - *false negative* (1,2)
+
+-   FP - *false positive* (2,1)
+
+-   TN - *true negative* (2,2)
+
+Na podstawie macierzy kontyngencji możemy obliczyć kilka często używanych metryk jakości prognoz:
+
+-   Dokładność (ang. *accuracy*)
+
+    $$\text{ACC} = \frac{\text{TP + TN}}{\text{P + N}}$$
+
+-   Czułość (ang. *sensitivity*, *recall*)
+
+    $$
+    \text{TPR} = \frac{\text{TP}}{\text{P}}
+    $$
+
+-   Specyfikacja (ang. *specificity*)
+
+    $$
+    \text{TNR} = \frac{\text{TN}}{\text{N}}
+    $$
+
+-   Precyzja (ang. *precision*)
+
+    $$\text{PPV} = \frac{\text{TP}}{\text{PP}}$$
+
+-   Współczynnik $F_1$
+
+    $$ F_1 = \frac{\text{2TP}}{\text{2TP + FP + FN}} $$
+
+Przydatny link: <https://en.wikipedia.org/wiki/Sensitivity_and_specificity> lub dokumentacja funkcji `caret::confusionMatrix`.
+
+Do porównywania kilku modeli możemy też wykorzystać kryteria informacyjne AIC lub BIC.
+
+```{r}
+table(y, y_hat)
+```
+
+```{r}
+confusionMatrix(
+  data = y_hat
+  , reference = y
+)
+```
+
+TBD: ROC AUC
