@@ -12,7 +12,9 @@ library(car)
 library(GGally)
 library(caret)
 library(ISLR)
+library(pROC)
 options(scipen = 20)
+theme_set(theme_bw())
 ```
 
 ## Regresja liniowa
@@ -32,7 +34,7 @@ options(scipen = 20)
 -   podział danych na zbiór uczący, zbiór testowy, zbiór walidacyjny (pominiemy w tym przykładzie).
 
 ```{r}
-data(cars)
+cars = datasets::cars
 str(cars)
 summary(cars)
 ```
@@ -367,4 +369,48 @@ confusionMatrix(
 )
 ```
 
-TBD: ROC AUC
+Jak widzieliśmy powyżej, funkcja `predict` przewiduje prawdopodobieństwo zdarzenia, że użytkownik karty kredytowej zbankrutuje. Jako próg klasyfikacji przyjęliśmy $50\%$, aczkolwiek możemy przyjąć zupełnie inny próg. Zależnie od przedmiotu badań, ten próg może być mniejszy lub większy. Na przykład przy diagnozowaniu pacjentów, jeśli model przewiduje, że prawdopodobieństwo zachorowania pacjenta wynosi $10\%$, to klasyfikujemy go do grupy ryzyka i poddajemy dalszym badaniom.
+
+Jak zatem zmieniają się posczególne metryki błędów w zależności od przyjętego progu?
+
+-   ROC (*receiver operating characteristic*) - na osi $x$ zaznaczamy FPR, na osi $y$ zaznaczamy TPR
+
+-   AUC (*area under curve*) - pole pod wykresem ROC:
+
+    -   wartość $0.5$ miałby model który po prostu by strzelał, tzn. w sposób losowy przydzielał obserwacje do poszczególnych klas
+
+    -   wartość $1$ ma model idealnie odseparowujący obie klasy
+
+    -   wartość $0$ ma model, który przypisuje obserwacje do przeciwnej klasy (błąd w kodowaniu zmiennych?)
+
+Chcemy zatem aby AUC było jak największe i koniecznie powyżej wartości $0.5$.
+
+```{r}
+roc = data.frame(
+  Threshold = seq(0, 1, by = 0.01)
+  , TPR = NA
+  , FPR = NA
+)
+
+for (i in 1:nrow(roc)) {
+  
+  y_hat_i = ifelse(y_hat_prob > roc$Threshold[i], 'Yes', 'No') %>%
+    as.factor()
+  
+  conf_matrix = table(y, y_hat_i) %>% as.matrix()
+  
+  roc$TPR[i] = conf_matrix[1, 1] / sum(conf_matrix[1, ])
+  roc$FPR[i] = conf_matrix[2, 1] / sum(conf_matrix[2, ])
+  
+}
+
+ggplot(roc, aes(x = FPR, y = TPR)) +
+  geom_line(size = 1) +
+  geom_abline(intercept = 0, slope = 1) +
+  ylim(c(0,1))
+```
+
+```{r}
+pROC::auc(y, y_hat_prob)
+pROC::roc(y, y_hat_prob) %>% plot()
+```
