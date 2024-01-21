@@ -1,0 +1,141 @@
+---
+title: "Drzewa decyzyjne i lasy losowe"
+author: "Paweł Wieczyński"
+format: html
+editor: visual
+---
+
+```{r}
+if(!require('pacman')) install.packages('pacman')
+pacman::p_load(tidyverse, caret, rpart, rpart.plot, ipred)
+```
+
+Mamy $k$ zmiennych objaśniających $x_1, \dots, x_n$ oraz zmienną celu $y$ dla $1, \dots, n$ obserwacji.
+
+## Drzewo klasyfikacyjne
+
+\[ wkleić rysunek drzewa i objaśnić terminologię (może być w prezentacji) \]
+
+\[ wkleić obraz dzielenia R\^2 na dwa regiony \]
+
+Jest to algorytm rekursyjny \[tbd wyjaśnić\]:
+
+1.  W pierwszym kroku wybieramy jedną ze zmiennych objaśniających $x_j$ oraz szukamy wartość tej zmiennej (ozn. ją jako próg $t$), która *najlepiej* klasyfikuje zbiór treningowy na klasy $0$ oraz $1$.
+2.  Z kroku pierwszego otrzymaliśmy dwa zbiory tzn. obserwacje dla których $x_j > t$ oraz $x_j \leq t$.
+3.  W każdym z tych zbiorów powtarzamy procedurę z kroku pierwszego otrzymując kolejne podzbiory. Całość powtarzamy, aż wszystkie podzbiory końcowe mają mniej niż z góry zadaną ilość obserwacji.
+
+Jak wybrać *najlepszą* klasyfikację zbioru treningowego? tbd zmienić oznaczenie Oznaczmy $\hat{p}$ ilość obserwacji z klasy $1$
+
+tbd wzory na CRE, Gini, Cross entropy
+
+### Krok 1: Przygotowanie danych
+
+```{r}
+df = read.csv('data\\wine-quality.csv', stringsAsFactors = TRUE)
+map_dbl(df, ~ sum(is.na(.x)))
+table(df$quality)
+```
+
+```{r}
+set.seed(123)
+train_index = createDataPartition(df$quality, p = 0.8, list = FALSE)
+df_train = df[train_index, ]
+df_test = df[-train_index, ]
+```
+
+### Krok 2: Trenowanie modelu
+
+W metodzie *rpart*, która jest jedną z implementacji drzew decyzyjnych, mamy kilka hiperparametrów, które możemy kontrolować:
+
+-   *cp (complexity parameter)* - podział drzewa, tzn. jeśli ten nie zmniejszy błędu dopasowania o zadany procent, to podział nie jest dokonywany
+
+-   *maxdepth* - maksymalna głębokość drzewa (początkowy węzeł liczymy jako 0)
+
+-   *minsplit* - minimalna ilość obserwacji jaka musi istnieć w poszczególnych węzłach
+
+-   *minbucket* - minimalna ilość obserwacji jaka musić istnieć w węzłach końcowych
+
+-   *xval* - ilość walidacji krzyżowych.
+
+Ponadto w *rpart* możemy wybrać czy podział ma być wykonany na podstawie indeksu Giniego czy na podstawie TBD
+
+```{r}
+model_1 = rpart(
+  quality ~ .
+  , data = df_train
+  , minsplit = 100
+  , minbucket = 10
+  , cp = 0.01
+  , xval = 1
+  , parms = list(split = 'gini')
+)
+# parms = list(split = 'information or gini')
+# Duza roznica miedzy information a gini !!!
+summary(model_1)
+
+
+rpart.plot(model_1, type = 4)
+```
+
+### Krok 3: Prognozowanie i ocena modelu
+
+```{r}
+y = df_test$quality
+y_hat = predict(model_1, newdata = df_test) %>%
+  .[, 1] %>%
+  as.numeric()
+
+y_hat = ifelse(y_hat > 0.5, 'bad', 'good') %>%
+  as.factor()
+  
+levels(y) == levels(y_hat)
+
+confusionMatrix(
+  data = y_hat
+  , reference = y
+)
+```
+
+## Bagging
+
+TBD Drzewa losowe mają dużą wariancję. Możemy zatem podzielić zbiór danych na kilka części, na każdej z nich dopasować osobne drzewko, a następnie uśrednić prognozy
+
+```{r}
+model_2 = bagging( 
+  quality ~ .
+  , data = df_train
+  , nbagg = 100
+  , coob = TRUE
+  
+  # Rpart parameters
+  , minsplit = 100
+  , minbucket = 10
+  , cp = 0.01
+  , xval = 1
+  , parms = list(split = 'gini')
+)
+
+# summary(model_2) # don't run
+model_2
+```
+
+```{r}
+y = df_test$quality
+y_hat = predict(model_2, newdata = df_test, type = 'prob') %>%
+  .[, 1]
+  as.numeric()
+
+y_hat = ifelse(y_hat > 0.5, 'bad', 'good') %>%
+  as.factor()
+  
+levels(y) == levels(y_hat)
+
+confusionMatrix(
+  data = y_hat
+  , reference = y
+)
+```
+
+tbd variable importance
+
+## Lasy losowe
