@@ -7,7 +7,7 @@ editor: visual
 
 ```{r}
 if(!require('pacman')) install.packages('pacman')
-pacman::p_load(tidyverse, caret, rpart, rpart.plot, ipred)
+pacman::p_load(tidyverse, caret, rpart, rpart.plot, ipred, rsample)
 ```
 
 Mamy $k$ zmiennych objaśniających $x_1, \dots, x_n$ oraz zmienną celu $y$ dla $1, \dots, n$ obserwacji.
@@ -137,5 +137,56 @@ confusionMatrix(
 ```
 
 tbd variable importance
+
+### Krok 2.5: Dobór optymalnych parametrów
+
+tbd opis: wykorzystamy metodę walidacji krzyżowej (ang. *cross-validation*)
+
+Biblioteka `caret` ma ciekawą infrastrukturę to optymalizacji hiperparametrów, ale z jakiegoś powodu funkcje z `caret` nie są kompatybilne z niektórymi algorytmami uczenia maszynowego. Spróbujmy zatem manualnie krok po kroku przeprowadzić walidację krzyżową w celu wyboru optymalnego zestawu hiperparametrów modelu.
+
+Najpierw definiujemy funkcję, która dopasowuje model dla danej kombinacji parametrów, następnie wykonuje prognozy oraz ocenia jakoś tych prognoz.
+
+```{r}
+evaluate_bagging_model = function(split, params) {
+  
+  # Trenowanie modelu
+  model = bagging(
+    quality ~ .
+    , data = df_train
+    , nbagg = params$nbagg
+    , minsplit = params$minsplit
+    , minbucket = params$minbucket
+    , cp = params$cp
+    , parms = list(split = 'gini')
+  )
+  
+  # Prognoza
+  pred = predict(model, newdata = assessment(split))
+  
+  # Ocena prognozy
+  confusionMatrix(
+    predictions
+    , assessment(split)$quality
+  )$overall['Accuracy']
+  
+}
+```
+
+Definiujemy siatkę hiperparametrów.
+
+```{r}
+tune_grid <- expand.grid(
+  nbagg = c(50, 100, 150)
+  , minsplit = c(50, 100, 150)
+  , minbucket = c(5, 10, 15)
+  , cp = c(0.01, 0.05, 0.1)
+)
+```
+
+```{r}
+set.seed(123)
+folds = vfold_cv(df_train, v = 10)
+
+```
 
 ## Lasy losowe
