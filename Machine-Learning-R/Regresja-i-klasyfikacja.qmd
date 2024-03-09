@@ -233,6 +233,13 @@ model_2 = step(model_1)
 summary(model_2)
 ```
 
+### Zadania
+
+1.  Wczytaj zbiór danych `kc_house_data.csv`. Usuń niepotrzebne zmienne.
+2.  Podziel dane na zbiór treningowy, walidacyjny oraz testowy.
+3.  Wybierz podzbiór zmiennych objaśniających, aby zminimalizować błąd prognozy na zbiorze walidacyjnym.
+4.  Dokonaj finalnej oceny modelu na zbiorze testowym.
+
 ## Regresja logistyczna
 
 W tym wypadku zmienna celu jest binarna, tzn. przyjmuje wartości 0 lub 1. Oznaczmy $p_i \in \left[ 0,1 \right]$ jako prawdopodobieństwo, że $y_i =1$. Równanie zwane **modelem logitowym** ma postać::
