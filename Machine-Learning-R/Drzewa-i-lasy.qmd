@@ -7,16 +7,12 @@ editor: visual
 
 ```{r}
 if(!require('pacman')) install.packages('pacman')
-pacman::p_load(tidyverse, caret, rpart, rpart.plot, ipred, rsample)
+pacman::p_load(tidyverse, caret, rpart, rpart.plot, ipred, randomForest)
 ```
 
 Mamy $k$ zmiennych objaśniających $x_1, \dots, x_n$ oraz zmienną celu $y$ dla $1, \dots, n$ obserwacji.
 
 ## Drzewo klasyfikacyjne
-
-\[ wkleić rysunek drzewa i objaśnić terminologię (może być w prezentacji) \]
-
-\[ wkleić obraz dzielenia R\^2 na dwa regiony \]
 
 Jest to algorytm rekursyjny \[tbd wyjaśnić\]:
 
@@ -73,7 +69,6 @@ model_1 = rpart(
 # Duza roznica miedzy information a gini !!!
 summary(model_1)
 
-
 rpart.plot(model_1, type = 4)
 ```
 
@@ -98,7 +93,15 @@ confusionMatrix(
 
 ## Bagging
 
-TBD Drzewa losowe mają dużą wariancję. Możemy zatem podzielić zbiór danych na kilka części, na każdej z nich dopasować osobne drzewko, a następnie uśrednić prognozy
+Drzewa losowe cechują się dużą wariancją, tzn. niewielka zmiana w danych lub niewielka zmiana parametrów modelu może sprawić, że struktura drzewa będzie wyglądać zupełnie inaczej. Aby ustabilizować wariancję, możemy zastosować procedurę *bootstrap aggregating*:
+
+1.  Losujemy $B$ próbek ze zwracaniem tego samego rozmiaru co dane wejściowe.
+
+2.  Na każdej próbce budujemy drzewo decyzyjne.
+
+3.  Wykonujemy prognozy na zbiorze testowym dla każdego modelu.
+
+4.  Uśredniamy prognozy.
 
 ```{r}
 model_2 = bagging( 
@@ -136,57 +139,157 @@ confusionMatrix(
 )
 ```
 
-tbd variable importance
-
-### Krok 2.5: Dobór optymalnych parametrów
-
-tbd opis: wykorzystamy metodę walidacji krzyżowej (ang. *cross-validation*)
-
-Biblioteka `caret` ma ciekawą infrastrukturę to optymalizacji hiperparametrów, ale z jakiegoś powodu funkcje z `caret` nie są kompatybilne z niektórymi algorytmami uczenia maszynowego. Spróbujmy zatem manualnie krok po kroku przeprowadzić walidację krzyżową w celu wyboru optymalnego zestawu hiperparametrów modelu.
-
-Najpierw definiujemy funkcję, która dopasowuje model dla danej kombinacji parametrów, następnie wykonuje prognozy oraz ocenia jakoś tych prognoz.
+Przyjrzyjmy się kilku przykładowym drzewom decyzyjnym w procedurze *baggingu*.
 
 ```{r}
-evaluate_bagging_model = function(split, params) {
+set.seed(213)
+B = 5
+n = nrow(df_train)
+
+for (b in 1:B) {
+  boot_indices = sample(
+    1:n
+    , size = n
+    , replace = TRUE
+  )
   
-  # Trenowanie modelu
-  model = bagging(
+  df_boot = df_train[boot_indices, ]
+  
+  boot_model = rpart(
     quality ~ .
-    , data = df_train
-    , nbagg = params$nbagg
-    , minsplit = params$minsplit
-    , minbucket = params$minbucket
-    , cp = params$cp
+    , data = df_boot
+    , minsplit = 100
+    , maxdepth = 3
+    , cp = 0.01
+    , xval = 1
     , parms = list(split = 'gini')
   )
   
-  # Prognoza
-  pred = predict(model, newdata = assessment(split))
-  
-  # Ocena prognozy
-  confusionMatrix(
-    predictions
-    , assessment(split)$quality
-  )$overall['Accuracy']
-  
+  rpart.plot(boot_model, type = 4)
 }
 ```
 
-Definiujemy siatkę hiperparametrów.
+Wszystkie drzewa mają podobną strukturę, tzn. te same zmienne są używane do podziału w każdym kroku. Mówimy, że drzewa są *skorelowane*.
+
+### Lasy losowe
+
+Szczególnym przypadkiem *baggingu* są lasy losowe. Aby uzyskać jeszcze większą losowość, czyli zdekorelować drzewa decyzyjne, możemy w każdym kroku wybierać zmienne objaśniające w sposób losowy.
 
 ```{r}
-tune_grid <- expand.grid(
-  nbagg = c(50, 100, 150)
-  , minsplit = c(50, 100, 150)
-  , minbucket = c(5, 10, 15)
-  , cp = c(0.01, 0.05, 0.1)
+set.seed(213)
+B = 5
+n = nrow(df_train)
+k = ncol(df_train)
+
+for (b in 1:B) {
+  boot_indices = sample(
+    1:n
+    , size = n
+    , replace = TRUE
+  )
+  
+  boot_columns = sample(
+    1:(k-1)
+    , size = 3
+    , replace = FALSE
+  )
+  
+  df_boot = df_train[boot_indices, c(boot_columns, k)]
+  
+  boot_model = rpart(
+    quality ~ .
+    , data = df_boot
+    , minsplit = 100
+    , maxdepth = 3
+    , cp = 0.01
+    , xval = 1
+    , parms = list(split = 'gini')
+  )
+  
+  rpart.plot(boot_model, type = 4)
+}
+```
+
+W bibliotece `randomForest` mamy poprawną oraz efektywną implementację tej procedury. Główne hiperparametry w lasach losowych to:
+
+-    `mtry` - ilość zmiennych objaśniających wybieranych w sposób losowy przy każdym podziale drzewa
+
+-   `ntree` - ilość drzew w lesie :)
+
+```{r}
+model_3 = randomForest(
+  quality ~.
+  , data = df_train
+  , mtry = 2
+  , ntree = 1000
+)
+
+model_3
+```
+
+TBD wyjaśnić błąd OOB
+
+```{r}
+y = df_test$quality
+y_hat = predict(model_3, newdata = df_test, type = 'prob') %>%
+  .[, 1]
+  as.numeric()
+
+y_hat = ifelse(y_hat > 0.5, 'bad', 'good') %>%
+  as.factor()
+  
+levels(y) == levels(y_hat)
+
+confusionMatrix(
+  data = y_hat
+  , reference = y
 )
 ```
 
-```{r}
-set.seed(123)
-folds = vfold_cv(df_train, v = 10)
+### Optymalizacja hiperparametrów
 
+Biblioteka `caret` zapewnia infrastrukturę to optymalizacji hiperparametrów w wielu algorytmach uczenia maszynowego. Spróbujmy zatem zbudować las losowy, dobierając parametr `mtry`, tak aby uzyskać jak największą wartość *accuracy* na zbiorze testowym.
+
+W funkcji `trainControl` definiujemy metodę (w tym wypadku będzie to walidacja krzyżowa).
+
+```{r}
+control = trainControl(
+  method = 'cv'
+  , number = 5
+)
 ```
 
-## Lasy losowe
+W funkcji `train` oprócz formułki i zbioru danych podajemy następujące argumenty:
+
+-   `method` - jaki algorytm uczenia maszynowego chcemy zastosować. List obsługiwanych algorytmów przez bibliotekę `caret`: <https://topepo.github.io/caret/train-models-by-tag.html>
+
+-   `metric` - jaką miarę dopasowania chcemy zoptymalizować
+
+-   `tuneLength` lub `tuneGrid` - siatka hiperparametrów do optymalizacji
+
+-   `trControl` - metoda optymalizacji hiperparametrów
+
+```{r}
+model_4 = train(
+  quality ~.
+  , data = df_train
+  , method = 'rf'
+  , metric = 'Accuracy'
+  , tuneLength = 11
+  , trControl = control
+)
+
+model_4
+```
+
+Wizualizacja dopasowania modelu w zależności od parametru `mtry`:
+
+```{r}
+plot(model_4)
+```
+
+### Zadania
+
+1.  Zbuduj drzewo regresyjne na zbiorze danych `kc_house_data.csv`.
+2.  Zbuduj las losowy na zbiorze danych `kc_house_data.csv`.
+3.  Porównaj wyniki z regresją liniową.
