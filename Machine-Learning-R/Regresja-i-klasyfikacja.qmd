@@ -110,52 +110,6 @@ ggplot(cars, aes(x = speed, y = dist)) +
   geom_smooth(formula = 'y ~ I(x^2)', method = 'lm', se = FALSE, color = 'red')
 ```
 
-Aby progznowanie na podstawie tego modelu było wiarygodne, musi być spełnione kilka założeń:
-
--   istnieje liniowa zależność między zmienną celu a regresorami
-
--   reszty modelu mają rozkład normalny
-
--   reszty modelu mają jednakową wariancję (są homoskedastyczne)
-
--   reszty modelu nie wykazują autokorelacji
-
--   w zbiorze danych nie ma obserwacji odstających (ang. *outliers*, *influential values*)
-
--   zmienne objaśniającę nie są idealnie skorelowane między sobą (w przypadku modelu z więcej niż jednym regresorem).
-
-```{r}
-# par(mfrow = c(2,2))
-plot(model_1)
-plot(model_2)
-```
-
-```{r}
-shapiro.test(model_1$residuals)
-shapiro.test(model_2$residuals)
-```
-
-```{r}
-ncvTest(model_1)
-ncvTest(model_2)
-```
-
-```{r}
-Box.test(model_1$residuals)
-Box.test(model_2$residuals)
-```
-
-```{r}
-cars_model_1 = augment(model_1)
-cars_model_2 = augment(model_2)
-
-ggplot(cars_model_1, aes(.resid)) +
-  geom_histogram(color = 'white', bins = 10)
-
-ggplot(cars_model_2, aes(.resid)) +
-  geom_histogram(color = 'white', bins = 10)
-```
-
 #### Krok 4: Prognozowanie
 
 ```{r}
