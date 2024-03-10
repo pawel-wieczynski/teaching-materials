@@ -6,13 +6,7 @@ editor: visual
 ---
 
 ```{r}
-library(tidyverse)
-library(broom)
-library(car)
-library(GGally)
-library(caret)
-library(ISLR)
-library(pROC)
+pacman::p_load(tidyverse, broom, car, GGally, caret, ISLR, pROC, class)
 options(scipen = 20)
 theme_set(theme_bw())
 ```
@@ -77,7 +71,7 @@ dla $i = 1, 2, \dots, n$ gdzie:
 
 Spośród wszystkich możliwych kombinacji $\alpha, \beta$ wybieramy takie $\widehat{\alpha}, \widehat{\beta}$, które minimalizują sumę kwadratów reszt, tzn.
 
-$$ \sum_{i=1}^n \epsilon_i^2 = \sum{i=1}^n \left( y_i - \widehat{y} \right)^2 \ \longrightarrow \ \min $$ Jest to tzw. **metoda najmniejszych kwadratów** (ang. metoda OLS).
+$$ \sum_{i=1}^n \epsilon_i^2 = \sum_{i=1}^n \left( y_i - \widehat{y} \right)^2 \ \longrightarrow \ \min $$ Jest to tzw. **metoda najmniejszych kwadratów** (ang. metoda OLS).
 
 ```{r}
 model_1 = lm(dist ~ speed, data = cars)
@@ -375,3 +369,138 @@ ggplot(roc, aes(x = FPR, y = TPR)) +
 pROC::auc(y, y_hat_prob)
 pROC::roc(y, y_hat_prob) %>% plot()
 ```
+
+## Algorytm k najbliższych sąsiadów
+
+Bardzo prosty i dosyć intuicyjny algorytm, które możemy wykorzystać zarówno do klasyfikacji jak i do regresji. Zacznijmy od klasyfikacji.
+
+### Klasyfikacja
+
+```{r}
+set.seed(213)
+train_indices = sample(
+  1:nrow(df)
+  , size = 100
+  , replace = FALSE
+)
+
+df_train = df[train_indices, ]
+df_test = df[-train_indices, ]
+
+ggplot(
+  df_train
+  , aes(x = income, y = balance)
+) +
+  geom_point(aes(color = default))
+```
+
+Algorytm działa następująco:
+
+1.  Wybieramy liczbę naturalną $k$.
+
+2.   Dla każdej nowej obserwacji liczymy jej *odległość* do wszystkich obserwacji w zbiorze treningowym.
+
+3.  Sortujemy odległości od najmniejszej do największej.
+
+4.  Nowej obserwacji przypisujemy klasę do której należy większość z jej $k$ sąsiadów. Gdy $k$ jest parzyste to mogą wystąpić tzw. *ties* - wówczas przypisujemy klasę najbliższego sąsiada lub redukujemy $k$ o $1$ lub przypisujemy klasę losowo.
+
+Kluczowym pojęciem jest tutaj odległość. Możemy zastosować różne definicje odległości, natomiast najczęściej stosowaną jest zwykła metryka euklidesowa. Musimy jednak ustandaryzować zmienne, ponieważ większość metryka, a w szczególności metryka euklidesowa, są wrażliwe na skalę.
+
+```{r}
+df_train_scaled = df_train %>%
+  select(balance, income) %>%
+  scale()
+
+df_test_scaled = df_test %>%
+  select(balance, income) %>%
+  scale()
+```
+
+W języku R implementację powyższego algorytmu znajdziemy w funkcji `knn` z biblioteki `class`.
+
+```{r}
+y_hat = knn(
+  df_train_scaled
+  , df_test_scaled
+  , cl = df_train$default
+  , k = 3
+)
+```
+
+Teraz możemy porównać z klasami ze zbioru testowego.
+
+```{r}
+confusionMatrix(y_hat, df_test$default)
+```
+
+Wizualizacja całej przestrzeni podzielonej granicą decyzyjną na dwa obszary.
+
+```{r}
+df_boundary = expand.grid(
+  x = seq(min(df_train_scaled[, 1]), max(df_train_scaled[, 1]), by = 0.01)
+  , y = seq(min(df_train_scaled[, 2]), max(df_train_scaled[, 2]), by = 0.01)
+)
+
+df_boundary = df_boundary %>%
+  mutate(KNN = knn(
+    df_train_scaled
+    , test = df_boundary %>% select(x, y)
+    , cl = df_train$default
+    , k = 3
+  ))
+
+ggplot() +
+  # Decision boundary
+  geom_tile(
+    data = df_boundary
+    , aes(x = x, y = y, fill = KNN)
+    , alpha = 0.3
+  ) +
+  # Original data
+  geom_point(
+    data = df_train %>%
+      mutate(income = scale(income), balance = scale(balance))
+    , aes(x = income, y = balance, color = default)
+    , size = 3
+  ) +
+  theme(legend.position = 'none')
+```
+
+### Regresja
+
+Algorytm działa bardzo podobnie jak w przypadku klasyfikacji. Nowej obserwacji przypisujemy średnią wartość zmiennej celu jej $k$ najbliższych sąsiadów. Oczywiście zamiast średniej możemy wybrać inną statystykę, np. medianę.
+
+```{r}
+df = read.csv(
+  'data\\insurance.csv'
+  , stringsAsFactors = TRUE
+)
+
+ggplot(df, aes(x = age, y = bmi)) +
+  geom_point(aes(color = charges))
+
+set.seed(213)
+train_indices = sample(1:nrow(df), 0.5*nrow(df))
+df_train_scaled = df[train_indices, ] %>%
+  select(bmi, age) %>%
+  scale()
+
+df_test_scaled = df[-train_indices, ] %>%
+  select(bmi, age) %>%
+  scale()
+
+model_knn = knnreg(
+  x = df_train_scaled
+  , y = df$charges[train_indices]
+  , k = 3
+)
+
+y_hat = predict(model_knn, newdata = df_test_scaled)
+
+RMSE(y_hat, df$charges[-train_indices])
+```
+
+### Zadania
+
+1.  Znajdź optymalną wartość $k$ dla danych `Default`, tak aby zminimalizować błąd walidacyjny.
+2.  Znajdź optymalną wartość $k$ dla danych `Insurance`, tak aby zminimalizować błąd walidacyjny.
