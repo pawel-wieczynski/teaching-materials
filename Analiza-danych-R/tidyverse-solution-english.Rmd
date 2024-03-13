@@ -1,0 +1,847 @@
+---
+title: "Data Analysis with R language"
+output: html_notebook
+---
+
+Table of contents:
+
+1. Explanatory data analysis with libraries *dplyr*, *tidyr* and *stringr* \
+  * Subsetting columns \
+  * Subsetting rows \
+  * Logical operators, Boole'an algebra, de Morgan laws \
+  * Creating new columns (1 exercise) \
+  * Handling missing values \
+  * Text manipulation (3 exercises) \
+  * Data aggregation (1 exercise) \
+  * Pivot tables, long and wide data format \
+  * Joining tables \
+  
+2. Data vizualization with library *ggplot2* \
+  * single numerical variable \
+  * single categorical variable \
+  * pair of numerical variables \
+  * pair of categorical variables \
+  * numerical and categorical variable \
+  * bubble charts (3 exercises) \
+  * multiple plot on single panel (2 exercises).
+
+Useful links: \
+ - [dplyr cheatsheet](https://raw.githubusercontent.com/rstudio/cheatsheets/main/data-transformation.pdf) \
+ - [tidyr cheatsheet](https://raw.githubusercontent.com/rstudio/cheatsheets/main/tidyr.pdf) \
+ - [stringr cheatsheet](https://raw.githubusercontent.com/rstudio/cheatsheets/main/strings.pdf) \
+ - [ggplot2 cheatsheet](https://raw.githubusercontent.com/rstudio/cheatsheets/main/data-visualization.pdf) \
+ - [A. Kassambara - Guide to Create Beautiful Graphics in R](http://www.sthda.com/english/download/3-ebooks/5-guide-to-create-beautiful-graphics-in-r-book/).
+ 
+[Color palletes](https://www.datanovia.com/en/blog/the-a-z-of-rcolorbrewer-palette/)
+  
+```{r}
+if(!require('tidyverse')) install.packages('tidyverse')
+library(tidyverse)
+```
+
+Dataset comes from [https://flixgem.com/](https://flixgem.com/) (version from 12th March 2021). Dataset includes info about 9425 movies and series available on Netflix.
+```{r}
+df = read.csv('netflix-dataset.csv', encoding = 'UTF-8')
+df
+```
+
+## Exploratory data analsis with dplyr and tidyr
+
+### Subsetting columns
+
+We select column by their names using *select()*. We can also remove columns be preceeding its name with minus sign.
+```{r}
+df %>%
+  select(Title, Runtime, IMDb.Score, Release.Date)
+```
+
+```{r}
+df %>%
+  select(-Netflix.Link, -IMDb.Link, -Image, -Poster, -TMDb.Trailer)
+```
+
+```{r}
+df %>%
+  select(c(1:3, 7:8))
+```
+
+```{r}
+df %>%
+  select(Title:Runtime)
+```
+
+Useful functions during selecting columns: \
+ - *starts_with()* - select/remove columns which names begins with a given string \
+ - *ends_with()* - select/remove columns which names end with a given string \
+ - *contains()* - select/remove columns which names contains given string.
+```{r}
+df %>%
+  select(starts_with('IMDb'))
+```
+
+```{r}
+df %>%
+  select(ends_with('Score'))
+```
+
+```{r}
+df %>%
+  select(contains('Date'))
+```
+
+With function *matches()* we can select or remove columns which names include given regular expression. Useful tool for building and testing regular expressions can be found here: [https://regex101.com/](https://regex101.com/).
+
+```{r}
+df %>%
+  select(matches('^[a-z]{5,6}$'))
+```
+
+```{r}
+df %>%
+  select(-matches('\\.'))
+```
+
+Function *select()* always returns data frame, but sometimes we need a single column returned as a vector. It can be achieved with function *pull()*.
+```{r}
+df %>%
+  select(IMDb.Score) %>%
+  unlist()
+
+# df %>%
+#   select(IMDb.Score) %>%
+#   unlist(use.names = FALSE)
+```
+
+```{r}
+df %>%
+  pull(IMDb.Score, Title)
+```
+
+```{r}
+df %>%
+  pull(IMDb.Score, Title)
+```
+
+### Filtering rows
+
+We filter rows with function *filter()* and comparison operators *==*, *!=*, *>*, *>=*, *<*, *<=*, *between()*. 
+```{r}
+df %>%
+  filter(Series.or.Movie == 'Series')
+```
+
+```{r}
+df %>%
+  filter(IMDb.Score > 8)
+```
+
+### Logical operators, Boole'an algebra, de Morgan laws
+
+Logical operator *AND* we denote with symbol *&* \
+ - *FALSE & FALSE = FALSE* \
+ - *FALSE & TRUE = FALSE* \
+ - *TRUE & FALSE = FALSE* \
+ - *TRUE & TRUE = TRUE*
+```{r}
+df %>%
+  filter(IMDb.Score >= 8 & Series.or.Movie == 'Series')
+```
+
+Logical operator *OR* we denote with symbol *|* \
+ - *FALSE | FALSE = FALSE* \
+ - *FALSE | TRUE = TRUE* \
+ - *TRUE | FALSE = TRUE* \
+ - *TRUE | TRUE = TRUE*
+```{r}
+df %>%
+  filter(IMDb.Score >= 9 | IMDb.Votes < 1000)
+```
+
+De Morgan laws states then when entering with negation into bracket then OR and AND are being exchanged: \
+*not (A & B) = (not A) |(not B)* \
+*not (A | B) = (not A) & (not B)* \
+```{r}
+df %>%
+  filter(!(IMDb.Score >= 9 | IMDb.Votes < 1000))
+```
+
+```{r}
+df %>%
+  filter(!(IMDb.Score >= 9) & !(IMDb.Votes < 1000))
+```
+
+### Creating new columns:
+
+With function *mutate()* we can add new columns or overwrite existing ones.
+```{r}
+df %>%
+  mutate(score_category = if_else(IMDb.Score >= 5, 'Good', 'Poor')) %>%
+  select(Title, IMDb.Score, score_category)
+```
+
+```{r}
+df = df %>%
+  mutate(
+    Release.Date = Release.Date %>% as.Date(format = '%m/%d/%Y')
+    ,Netflix.Release.Date = Netflix.Release.Date %>% as.Date(format = '%m/%d/%Y')
+  )
+```
+
+**EXERCISE 1:** What is the oldest movie directed by Woody Allena available on Netflix?
+```{r}
+df %>%
+  filter(Director == 'Woody Allen') %>%
+  filter(Release.Date == min(Release.Date))
+  select(Title, Director, Release.Date)
+```
+
+When using *case_when()* we don't need to explicitly write mutually exclusive conditions. Function evaluation occurs just after it encounters first true set of conditions.
+```{r}
+df %>%
+  mutate(score_category = case_when(
+    IMDb.Score <= 2 ~ 'Very Poor'
+    ,IMDb.Score <= 4 ~ 'Poor'
+    ,IMDb.Score <= 6 ~ 'Medium'
+    ,IMDb.Score <= 8 ~ 'Good'
+    ,IMDb.Score <= 10 ~ 'Very Good'
+    )) %>%
+  select(Title, IMDb.Score, score_category)
+```
+
+Mathematical functions performed on each row we apply by precedding whole operation with *rowwise()* function.
+```{r}
+df %>%
+  select(ends_with('Score'))
+```
+
+```{r}
+df %>%
+  mutate(avg_score = mean(c(IMDb.Score * 10
+                            ,Hidden.Gem.Score * 10
+                            ,Rotten.Tomatoes.Score
+                            ,Metacritic.Score)
+                          ,na.rm = TRUE) %>%
+           round(2)) %>%
+  select(Title, avg_score)
+```
+
+```{r}
+df %>% 
+  rowwise() %>%
+  mutate(avg_score = mean(c(IMDb.Score * 10
+                            ,Hidden.Gem.Score * 10
+                            ,Rotten.Tomatoes.Score
+                            ,Metacritic.Score)
+                          ,na.rm = TRUE) %>%
+           round(2)) #%>%
+  # select(Title, avg_score)
+```
+
+By default, new columns created with *mutate()* are added at the end of the data frame. With *relocate()* we can change position of a particular column.
+```{r}
+df %>%
+  mutate(Popularity = if_else(IMDb.Votes > quantile(IMDb.Votes, 0.90, na.rm = TRUE), 'High', 'Not High')) %>%
+  relocate(Popularity, .after = Title)
+```
+
+We can rename columns with *rename()*.
+```{r}
+df %>%
+  rename(
+    Tytul = Title
+    ,Gatunek = Genre
+  )
+```
+
+```{r}
+df %>%
+  mutate(Tytul = Title) %>%
+  select(-Title) %>%
+  relocate(Tytul, .before = everything())
+```
+
+
+### Handling missing values
+
+Library *tidyr* provides several handful of function for dealing with missing data: \
+ - *drop_na()* - delete rows with missing values in selected columns \
+ - *replace_na()* - replace missing values with constant value \
+ - *fill()* - replace missing values with first or last non-missing value.
+
+```{r}
+sum(is.na(df$Hidden.Gem.Score))
+```
+
+```{r}
+df %>%
+  sapply(function(x) is.na(x) %>% sum())
+```
+
+```{r}
+df %>%
+  drop_na(Hidden.Gem.Score, Awards.Nominated.For)
+```
+
+```{r}
+df %>%
+  mutate(Hidden.Gem.Score = replace_na(Hidden.Gem.Score, median(Hidden.Gem.Score, na.rm = TRUE))) %>%
+  sapply(function(x) is.na(x) %>% sum())
+```
+
+```{r}
+df %>%
+  replace_na(list(Hidden.Gem.Score = median(df$Hidden.Gem.Score, na.rm = TRUE))) %>%
+  sapply(function(x) is.na(x) %>% sum())
+```
+
+### Text manipulation
+
+Library *stringr* contains handful of useful function for string manipulation and regular expressions. Most of functions from this library beging with *str_*.
+
+```{r}
+str_
+```
+
+Question: What can be improved in the below code to maintain *tidyverse* syntax?
+```{r}
+gatunki = df %>%
+  pull(Genre) %>%
+  paste0(collapse = ', ') %>%
+  str_extract_all('[A-Za-z]+') %>%
+  unlist() %>%
+  table() %>%
+  as.data.frame()
+
+gatunki %>%
+  arrange(-Freq)
+```
+
+```{r}
+df$Series.or.Movie %>% table()
+```
+
+```{r}
+df %>%
+  mutate(poland_available = str_detect(Country.Availability, 'Poland')) %>%
+  filter(poland_available == TRUE) %>%
+  pull(Title)
+```
+
+With function *separate()* we can split single column into several ones, and we can join multiple columns into a single one with function *unite()*.
+```{r}
+df %>%
+  unite(
+    col = 'Scores'
+    ,c('Hidden.Gem.Score', 'IMDb.Score', 'Rotten.Tomatoes.Score', 'Metacritic.Score')
+    ,sep = ', '
+  ) %>%
+  select(Title, Scores)
+```
+
+```{r}
+arrange(select(filter(...)))
+
+filter(...) %>%
+  select() %>%
+  arrange()
+``` 
+
+**EXERCISE 2:** What are the best three comedies available in Polish language?
+```{r}
+# EXERCISE 2 ----
+df %>%
+  filter(Genre %>%
+           str_detect('Comedy')) %>%
+  filter(Languages %>%
+           str_detect('Polish')) %>%
+  arrange(-IMDb.Score) %>%
+  select(Title, IMDb.Score) %>%
+  top_n(3)
+
+```
+
+**EXERCISE 4:** What are the most popular tags for series and movies available in Polish language?
+```{r}
+df %>%
+  filter(Languages %>%
+           str_detect('Polish')) %>%
+  pull(Tags) %>%
+  str_c(collapse = ',') %>%
+  str_split(',') %>%
+  table() %>%
+  as.data.frame() %>%
+  arrange(-Freq) %>%
+  top_n(10)
+```
+
+### Data aggregation
+
+With functions *group_by()* and *summarize()* we work on aggregated data.
+```{r}
+df %>%
+  group_by(Runtime) %>%
+  summarize(
+    count = n()
+    ,avg_imdb_score = mean(IMDb.Score, na.rm = TRUE) %>% round(2)
+    ,avg_imdb_votes = mean(IMDb.Votes, na.rm = TRUE) %>% round(0)
+    ,sum_awards = sum(Awards.Received, na.rm = TRUE)
+  )
+```
+
+```{r}
+df %>%
+  group_by(Series.or.Movie, Runtime) %>%
+  summarize(n = n()) %>%
+  arrange(-n)
+```
+
+**EXERCISE 3:** For movies and series released in 2019 and 2020 what is the average time between its release date and appearance on Netflix?
+
+```{r}
+library(lubridate)
+
+df %>%
+  mutate(Year = year(Release.Date)) %>%
+  filter(between(Year, 2019, 2020)) %>%
+  mutate(Datediff = Netflix.Release.Date - Release.Date) %>%
+  group_by(Year) %>%
+  summarize(mean(Datediff) %>% round(0))
+```
+
+```{r}
+library(lubridate)
+
+df %>%
+  pull(Release.Date) %>%
+  .[1:5] %>%
+  year()
+
+year(df$Release.Date[1:5])
+
+```
+
+**EXERCISE 5:** What are average ratings of movies produced in different decades (i.e. 60s, 70s, 80s, 90s etc.)?
+```{r}
+
+```
+
+### Pivot tables, long and wide data format
+
+df in *wide* format: \
+ - single individuals are represented by rows \
+ - their attributes are represented by columns \
+ - in each cell there is a value of a given attribute for a given individual.
+ 
+df in *long* format: \
+ - in first columns can can see individual key (which can be constructed from multiple columns) \
+ - all the attributes are in single column \
+ - all the values are in single column.
+
+*Long* format is especially useful when creating plots with library *ggplot2*.
+
+```{r}
+df_pivot = df %>%
+  select(Title, ends_with('Score'))
+```
+
+```{r}
+df_pivot = df_pivot %>%
+  pivot_longer(
+    cols = 2:5
+    ,names_to = 'Attribute'
+    ,values_to = 'Value'
+  )
+```
+
+```{r}
+df_pivot = df_pivot %>%
+  pivot_wider(
+    id_cols = 1
+    ,names_from = 'Attribute'
+    ,values_from = 'Value'
+  )
+```
+
+### Joining tables
+
+```{r}
+oceny_metacritic = df %>%
+  select(Title, Metacritic.Score) %>%
+  .[1:100,] %>%
+  drop_na()
+
+oceny_rotten_tomatoes = df %>%
+  select(Title, Rotten.Tomatoes.Score) %>%
+  .[1:100,] %>%
+  drop_na()
+```
+
+We join tables by their respective keys, exactly how we do it in SQL.
+```{r}
+oceny_metacritic %>%
+  left_join(oceny_rotten_tomatoes, by = c('Title' = 'Title'))
+```
+
+```{r}
+oceny_metacritic %>%
+  right_join(oceny_rotten_tomatoes, by = c('Title' = 'Title'))
+```
+
+```{r}
+oceny_metacritic %>%
+  inner_join(oceny_rotten_tomatoes, by = c('Title' = 'Title'))
+```
+
+```{r}
+oceny_metacritic %>%
+  full_join(oceny_rotten_tomatoes, by = c('Title' = 'Title'))
+```
+
+```{r}
+oceny_metacritic %>%
+  anti_join(oceny_rotten_tomatoes, by = c('Title' = 'Title'))
+```
+
+```{r}
+oceny_rotten_tomatoes %>%
+  anti_join(oceny_metacritic, by = c('Title' = 'Title'))
+```
+
+## Data vizualization with library ggplot2
+
+```{r}
+theme_set(theme_bw())
+```
+
+General rules for creating plots with *ggplot2*: \
+ - as arguments to *ggplot()* function provide data frame and optionally axes *x*, *y* and parameters *shape*, *color*, *fill*, *group* \
+ - add plot layers with functions starting with *geom_* or *stat_* \
+ - modify plot by adding legends, titles, markers etc.
+ 
+For quick data vizualization one can use function *qplot()*, which automatically picks plot type to the underlying data.
+
+### Single numerical variable
+
+```{r}
+ggplot(df, aes(x = IMDb.Score)) +
+  geom_histogram(color = 'blue', fill = 'red')
+
+ggplot(df, aes(x = IMDb.Score)) +
+  geom_histogram(aes(fill = Series.or.Movie), color = 'black', bins = 50) +
+  labs(x = 'Rating', y = 'Count', title = 'Histogram of movie ratings', fill = 'Serie or movie') +
+  theme(legend.position = 'bottom')
+```
+
+```{r}
+ggplot(df, aes(x = IMDb.Score)) +
+  geom_histogram(
+    aes(y = ..density..)
+    ,bins = 50
+    ,color = 'black'
+    ,fill = 'white'
+  ) +
+  geom_density(
+    aes(color = Series.or.Movie)
+    ,color = 'blue'
+    ,fill = 'lightblue'
+    ,alpha = 0.5
+    ,size = 1
+  ) +
+  labs(title = 'Density of ratings')
+```
+
+### Single categorical variable
+
+```{r}
+if(!require('RColorBrewer')) install.packages('RColorBrewer')
+library(RColorBrewer)
+```
+
+```{r}
+table(df$Runtime)
+```
+
+```{r}
+df = df %>%
+  filter(Runtime != '')
+
+ggplot(df, aes(x = Runtime)) +
+  geom_bar(aes(fill = Runtime)) +
+    scale_x_discrete(
+    limits = c('< 30 minutes'
+               ,'30-60 mins'
+               ,'1-2 hour'
+               ,'> 2 hrs')
+    ,labels = function(x) str_wrap(x, width = 8)
+  ) 
+
+ggplot(df, aes(x = Runtime)) +
+  geom_bar(aes(fill = Runtime))+
+  scale_x_discrete(
+    limits = c('< 30 minutes'
+               ,'30-60 mins'
+               ,'1-2 hour'
+               ,'> 2 hrs')
+    ,labels = function(x) str_wrap(x, width = 8)
+  ) +
+  theme(
+    legend.position = 'none'
+    ,axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)
+  ) +
+  scale_fill_manual(values = brewer.pal(4, 'Accent'))
+
+```
+
+### Pair of numerical variables
+
+```{r}
+ggplot(df, aes(x = IMDb.Score, y = IMDb.Votes)) +
+  geom_point(aes(color = Series.or.Movie)) +
+  geom_smooth(method = 'loess') +
+  theme(legend.position = c(0.5, 0.5))
+
+ggplot(df, aes(x = IMDb.Score, y = IMDb.Votes)) +
+  geom_point(aes(color = Series.or.Movie)) +
+  geom_smooth(method = 'lm') +
+  theme(legend.position = c(0.2, 0.8)) +
+  xlim(c(5, 7.5)) +
+  ylim(c(0, 5e5))
+```
+
+### Pair of categorical variables
+
+aes(
+ x, y, fill, color, shape, size
+)
+
+```{r}
+ggplot(df, aes(x = Series.or.Movie, y = Runtime)) +
+  geom_jitter(aes(color = Runtime, shape = Series.or.Movie)) +
+  # theme(legend.position = 'none') +
+  scale_y_discrete(
+    limits = c('< 30 minutes'
+               ,'30-60 mins'
+               ,'1-2 hour'
+               ,'> 2 hrs')
+  ) +
+  labs(title = 'Plot tile', subtitle = 'test', x ='', y = '', color = 'Legend title', shape = 'Legend 2')
+```
+
+### Numerical and categorical variable
+
+```{r}
+ggplot(df, aes(x = Series.or.Movie, y = IMDb.Score)) +
+  geom_boxplot(
+    aes(fill = Series.or.Movie)
+    ,outlier.alpha = 0.25
+  ) + 
+  #   geom_text(
+  #   data = medians
+  #   ,aes(x = Series.or.Movie, y = m, label = m)
+  #   ,color = 'blue'
+  #   ,hjust = 7 
+  # ) + 
+  stat_boxplot(geom ='errorbar', position = 'dodge') +
+  stat_summary(
+    aes(ymax = ..y.., ymin = ..y..)
+    ,fun = mean
+    ,geom = 'errorbar'
+    ,width = .75
+    ,linetype = 'solid'
+    ,position = 'dodge'
+    ,color = 'white'
+    ,size = 1
+  ) +
+  theme(legend.position = 'none')
+```
+
+### Bubble charts
+
+```{r}
+if(!require('ggrepel')) install.packages('ggrepel')
+library(ggrepel)
+```
+
+```{r}
+genres <- df %>% 
+  select(Genre) %>% 
+  unlist() %>% 
+  strsplit(',') %>%
+  unlist() %>% 
+  trimws() %>% 
+  table() %>% 
+  as.data.frame()
+
+genres <- data.frame(
+  Genre = genres$.
+  ,`Count` = genres$Freq
+  ,`IMDb Score Average` = NA
+  ,`IMDb Votes Average` = NA
+)
+
+for (i in 1:nrow(genres)) {
+  genres$IMDb.Score.Average[i] <- df %>% 
+    filter(str_detect(Genre, genres$Genre[i] %>%
+                        as.character() %>% eval())) %>%
+    select(IMDb.Score) %>% unlist() %>% mean(na.rm = TRUE)
+  
+  genres$IMDb.Votes.Average[i] <- df %>% 
+    filter(str_detect(Genre, genres$Genre[i] %>%
+                        as.character() %>% eval())) %>%
+    select(IMDb.Votes) %>% unlist() %>% mean(na.rm = TRUE)
+}
+
+ggplot(genres, aes(IMDb.Score.Average, IMDb.Votes.Average, label = Genre)) +
+  geom_point(aes(color = Genre, size = Count)) +
+  geom_text_repel() +
+  theme(legend.position = 'none')
+```
+
+**EXERCISE 6:** Create alike plot with actors starred in the best movies.
+```{r}
+actors <- df %>% 
+  select(Actors) %>% 
+  unlist() %>% 
+  strsplit(',') %>%
+  unlist() %>% 
+  trimws() %>% 
+  table() %>% 
+  as.data.frame()
+
+actors <- data.frame(
+  Actor = actors$.
+  ,`Count` = actors$Freq
+  ,`IMDb Score Average` = NA
+  ,`IMDb Votes Average` = NA
+) %>%
+  filter(Count > 15)
+
+for (i in 1:nrow(actors)) {
+  actors$IMDb.Score.Average[i] <- df %>% 
+    filter(str_detect(Actors, actors$Actor[i] %>%
+                        as.character() %>% eval())) %>%
+    select(IMDb.Score) %>% unlist() %>% mean(na.rm = TRUE)
+  
+  actors$IMDb.Votes.Average[i] <- df %>% 
+    filter(str_detect(Actors, actors$Actor[i] %>%
+                        as.character() %>% eval())) %>%
+    select(IMDb.Votes) %>% unlist() %>% mean(na.rm = TRUE)
+}
+
+ggplot(actors, aes(IMDb.Score.Average, IMDb.Votes.Average, label = Actor)) +
+  geom_point(aes(color = Actor, size = Count)) +
+  geom_text_repel() +
+  theme(legend.position = 'none')
+```
+
+**EXERCISE 7:** Create alike plot to show in which years the best movies were created.
+
+```{r}
+prod_yr <- df %>% 
+  mutate(Year = lubridate::year(Release.Date)) %>%
+  select(Year, IMDb.Score, IMDb.Votes) %>%
+  group_by(Year) %>%
+  summarize(Count = n()
+            ,IMDb.Score.Average = mean(IMDb.Score, na.rm = TRUE)
+            ,IMDb.Votes.Average = mean(IMDb.Votes, na.rm = TRUE)) %>%
+  ungroup()
+
+ggplot(prod_yr, aes(IMDb.Score.Average, IMDb.Votes.Average, label = Year)) +
+  geom_point(aes(color = Year, size = Count)) +
+  geom_text_repel(max.overlaps = 5) +
+  theme(legend.position = 'none')
+
+ggplot(prod_yr %>%
+         filter(Count >= 10)
+       ,aes(IMDb.Score.Average, IMDb.Votes.Average, label = Year)) +
+  geom_point(aes(color = Year, size = Count)) +
+  geom_text_repel(max.overlaps = 10) +
+  theme(legend.position = 'none')
+```
+
+**EXERCISE 8:** What are the most popular languages available on Netflix? Hist: use column chart.
+```{r}
+languages <- df %>% select(Languages) %>% unlist() %>% strsplit(',') %>%
+  unlist() %>% trimws() %>% table() %>% as.data.frame() %>% filter(Freq >= 20 & Freq <= 5000)
+colnames(languages) <- c('Language', 'Count')
+
+ggplot(languages, aes(x = reorder(Language, -Count), y = Count)) +
+  geom_col(aes(fill = -Count)) +
+  labs(x = '', y = '') +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1)
+        ,legend.position = 'none')
+
+```
+
+### Multiple plot on single panel
+
+```{r}
+ggplot(df, aes(x = IMDb.Score)) +
+  geom_histogram(
+    aes(fill = Series.or.Movie)
+    ,bins = 50
+    ,color = 'black'
+  ) +
+  # facet_grid(.~ Series.or.Movie)
+  # facet_grid(Series.or.Movie ~ .)
+  # facet_grid(Runtime ~ Series.or.Movie, scales = 'free')
+  # facet_wrap(vars(Series.or.Movie), ncol = 2)
+  # facet_wrap(vars(Series.or.Movie), nrow = 2)
+  facet_wrap(vars(Series.or.Movie, Runtime), ncol = 3, scales = 'free') +
+  theme(legend.position = 'none')
+```
+
+**EXERCISE 9:** For series and movies create plot of rating from different portals (Hidden Gem, IMDb, Rotten Tomatoes, Metacritic). Hint: worth to unpivot data frame to *long* format.
+
+```{r}
+df %>%
+  select(ends_with('Score')) %>%
+  pivot_longer(
+    cols = 1:4
+    ,names_to = 'Variable'
+    ,values_to = 'Value'
+  ) %>%
+  drop_na() %>%
+  ggplot(aes(x = Variable, y = Value)) +
+  geom_boxplot(aes(fill = Variable)) +
+  facet_wrap(vars(Variable), scales = 'free') +
+  theme(legend.position = 'none')
+```
+
+```{r}
+if(!require('gridExtra')) install.packages('gridExtra')
+library(gridExtra)
+```
+
+```{r}
+p1 = ggplot(df, aes(x = IMDb.Score, y = IMDb.Votes, color = Series.or.Movie)) +
+  geom_point() +
+  theme(legend.position = c(0.3, 0.8))
+
+p2 = ggplot(genres, aes(IMDb.Score.Average, IMDb.Votes.Average, label = Genre)) +
+  geom_point(aes(color = Genre, size = Count)) +
+  geom_text_repel() +
+  theme(legend.position = 'none')
+
+grid.arrange(p1, p2, ncol = 2)
+```
+
+**EXERCISE 10:** Which production houses are most productive and how was it changing during recent years?
+```{r}
+df %>%
+  mutate(rel_year = Release.Date %>%
+           lubridate::year()) %>%
+  select(rel_year, Production.House) %>%
+  filter(Production.House != '' & rel_year %>% between(2010, 2020)) %>%
+  drop_na() %>%
+  separate_rows(Production.House, sep = ', ') %>%
+  group_by(rel_year, Production.House) %>%
+  summarize(n = n()) %>%
+  ungroup() %>%
+  filter(n > 3) %>%
+  ggplot(aes(x = as.factor(rel_year), y = n, label = Production.House)) +
+  geom_point(aes(color = rel_year, size = n)) +
+  geom_text_repel(max.overlaps = 10) +
+  theme(legend.position = 'none')
+
+```
