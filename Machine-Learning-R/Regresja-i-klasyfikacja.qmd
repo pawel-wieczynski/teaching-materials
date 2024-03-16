@@ -6,7 +6,7 @@ editor: visual
 ---
 
 ```{r}
-pacman::p_load(tidyverse, broom, car, GGally, caret, ISLR, pROC, class)
+pacman::p_load(tidyverse, broom, car, GGally, caret, ISLR, pROC, class, glmnet)
 options(scipen = 20)
 theme_set(theme_bw())
 ```
@@ -516,3 +516,107 @@ RMSE(y_hat, df$charges[-train_indices])
 1.  Znajdź optymalną wartość $k$ dla danych `Default`, tak aby zminimalizować błąd walidacyjny.
 2.  Znajdź optymalną wartość $k$ dla danych `Insurance`, tak aby zminimalizować błąd walidacyjny.
 3.  Napisz funkcję, która podzieli zbiór danych na zbiór treningowy i testowy w zadanych proporcjach. Opcjonalnie funkcja może dokonywać skalowanie zmiennych. Będziemy z tej funkcji korzystać przy poznawaniu kolejnych algorytmów.
+
+## Regularyzacja
+
+```{r}
+df = read.csv('data\\gene_expression.csv')
+```
+
+```{r}
+set.seed(213)
+train_index = sample(1:nrow(df), 0.75 * nrow(df), replace = FALSE)
+df_train = df[train_index, ]
+df_test = df[-train_index, ]
+```
+
+```{r}
+model_1 = lm(disease_indicator ~ ., data = df_train)
+```
+
+```{r}
+y_hat = predict(model_1, newdata = df_test)
+```
+
+Poniżej widzimy, że funkcja straty na zbiorze treningowym wynosi $0$, natomiast funkcja straty na zbiorze testowym ma bardzo dużą wartość. Model został przetrenowany (ang. *overfitting*).
+
+```{r}
+# MSE treningowy
+mean(model_1$residuals^2)
+# MSE testowy
+mean( (df_test$disease_indicator - y_hat)^2 )
+```
+
+### Regresja typu ridge oraz lasso
+
+```{r}
+X_train = df_train %>% select(-disease_indicator) %>% as.matrix()
+X_test = df_test %>% select(-disease_indicator) %>% as.matrix()
+
+y_train = df_train %>% select(disease_indicator) %>% as.matrix()
+y_test = df_test %>% select(disease_indicator) %>% as.matrix()
+
+model_ridge = cv.glmnet(
+  x = X_train
+  , y = y_train
+  , alpha = 0 # Ridge regression
+  , nfolds = 5
+)
+
+model_ridge
+
+y_hat_train = predict(
+  model_ridge
+  , s = model_ridge$lambda.min
+  , newx = X_train
+)
+
+y_hat_test = predict(
+  model_ridge
+  , s = model_ridge$lambda.min
+  , newx = X_test
+)
+
+# MSE treningowy
+mean( (y_hat_train - y_train )^2 )
+# MSE testowy
+mean( (y_hat_test - y_test)^2 )
+```
+
+W regresji grzbietowej niektóre wartości współczynników $\hat{\beta}$ są bliskie $0$, ale nigdy nie osiągają tej wartości - metoda regresji grzbietowej pozwala tylko na dojście asymptotycznie blisko do $0$. W przypadku regresji lasso dostajemy zerowe współczynniki - daje nam to bardzo przydatną własność, mianowicie lasso działa jak **selektor zmiennych**.
+
+### Regresja elastic net
+
+Aby uzyskać korzyści płynące z regresji grzbietowej (penalizacja skorelowanych zmiennych objaśniających) oraz regresji lasso (selekcja zmiennych), możemy do funkcji straty dodać średnią ważoną z regresji ridge oraz lasso. Jest to tzw. model *elastic-net*:
+
+```{r}
+model_elnet = cv.glmnet(
+  x = X_train
+  , y = y_train
+  , alpha = 0.5
+  , nfolds = 5
+)
+
+model_elnet
+
+y_hat_train = predict(
+  model_elnet
+  , s = model_elnet$lambda.min
+  , newx = X_train
+)
+
+y_hat_test = predict(
+  model_elnet
+  , s = model_elnet$lambda.min
+  , newx = X_test
+)
+
+# MSE treningowy
+mean( (y_hat_train - y_train )^2 )
+# MSE testowy
+mean( (y_hat_test - y_test)^2 )
+```
+
+### Zadania
+
+1.  Do zbioru danych `heart_disease.csv` znaleźć optymalne parametry $\lambda$ oraz $\alpha$, aby zminimalizować błąd na zbiorze testowym.
