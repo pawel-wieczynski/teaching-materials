@@ -1,5 +1,5 @@
 ---
-title: "Regresja liniowa i regresja logistyczna"
+title: "Regresja liniowa, regresja logistyczna, algorytm k najbliższych sąsiadów"
 author: "Paweł Wieczyński"
 format: html
 editor: visual
@@ -370,6 +370,17 @@ pROC::auc(y, y_hat_prob)
 pROC::roc(y, y_hat_prob) %>% plot()
 ```
 
+### Zadania
+
+1.  Wczytaj zbiór danych `heart.disease.csv`
+2.  Przygotuj dane: usuń lub zastąp wartości brakujące, sprawdź czy są wartości odstające (tzw. *outliery*), podziel dane zbiór treningowy oraz testowy.
+3.  Zbuduj model regresji logistycznej, aby zminimalizować błąd walidacyjny.
+4.  Dokonaj finalnej oceny modelu na zbiorze testowym.
+
+Jeśli algorytm błędnie zaklasyfikuje zdrowego pacjenta jako chorego to nic złego się nie stanie - pacjent zostanie poddany dodatkowym badaniom, które wykluczą chorobę. Natomiast gdy algorytm będzie błędnie klasyfikował chorych pacjentów jako zdrowych - to taki model nie będzie się nadawał do praktycznych zastosowań. Częstym wymogiem jest osiągnięcie przez model określonego poziomu specyfikacji (np. TN / N powyżej 95%) zamiast maksymalizacji dokładności.
+
+5.  Co możemy zrobić, aby zwiększyć poziom specyfikacji modelu?
+
 ## Algorytm k najbliższych sąsiadów
 
 Bardzo prosty i dosyć intuicyjny algorytm, które możemy wykorzystać zarówno do klasyfikacji jak i do regresji. Zacznijmy od klasyfikacji.
@@ -398,7 +409,7 @@ Algorytm działa następująco:
 
 1.  Wybieramy liczbę naturalną $k$.
 
-2.   Dla każdej nowej obserwacji liczymy jej *odległość* do wszystkich obserwacji w zbiorze treningowym.
+2.  Dla każdej nowej obserwacji liczymy jej *odległość* do wszystkich obserwacji w zbiorze treningowym.
 
 3.  Sortujemy odległości od najmniejszej do największej.
 
@@ -504,3 +515,4 @@ RMSE(y_hat, df$charges[-train_indices])
 
 1.  Znajdź optymalną wartość $k$ dla danych `Default`, tak aby zminimalizować błąd walidacyjny.
 2.  Znajdź optymalną wartość $k$ dla danych `Insurance`, tak aby zminimalizować błąd walidacyjny.
+3.  Napisz funkcję, która podzieli zbiór danych na zbiór treningowy i testowy w zadanych proporcjach. Opcjonalnie funkcja może dokonywać skalowanie zmiennych. Będziemy z tej funkcji korzystać przy poznawaniu kolejnych algorytmów.
