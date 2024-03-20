@@ -7,22 +7,61 @@ editor: visual
 
 ```{r}
 if(!require('pacman')) install.packages('pacman')
-pacman::p_load(tidyverse, caret, rpart, rpart.plot, ipred, randomForest)
+pacman::p_load(tidyverse, caret, rpart, rpart.plot, ipred, randomForest, adabag, gbm, xgboost, vip, pdp)
 ```
-
-Mamy $k$ zmiennych objaśniających $x_1, \dots, x_n$ oraz zmienną celu $y$ dla $1, \dots, n$ obserwacji.
 
 ## Drzewo klasyfikacyjne
 
-Jest to algorytm rekursyjny \[tbd wyjaśnić\]:
+Algorytm tworzenia drzewa decyzyjnego działa następująco:
 
 1.  W pierwszym kroku wybieramy jedną ze zmiennych objaśniających $x_j$ oraz szukamy wartość tej zmiennej (ozn. ją jako próg $t$), która *najlepiej* klasyfikuje zbiór treningowy na klasy $0$ oraz $1$.
 2.  Z kroku pierwszego otrzymaliśmy dwa zbiory tzn. obserwacje dla których $x_j > t$ oraz $x_j \leq t$.
-3.  W każdym z tych zbiorów powtarzamy procedurę z kroku pierwszego otrzymując kolejne podzbiory. Całość powtarzamy, aż wszystkie podzbiory końcowe mają mniej niż z góry zadaną ilość obserwacji.
+3.  W każdym z tych zbiorów powtarzamy procedurę z kroku pierwszego otrzymując kolejne podzbiory. Całość powtarzamy, aż wszystkie podzbiory końcowe mają z góry zadaną ilość obserwacji.
 
-Jak wybrać *najlepszą* klasyfikację zbioru treningowego? tbd zmienić oznaczenie Oznaczmy $\hat{p}$ ilość obserwacji z klasy $1$
+Jak wybrać *najlepszą* klasyfikację zbioru treningowego? Oznaczmy $p$ proporcję obserwacji z klasy $1$ w danym węźle drzewa decyzyjnego. Wówczas $1-p$ będzie oznaczało proporcję obserwacji z klasy $0$ w tym samym węźle. Możemy zastosować kilka metryk oceniających jak dobrze dany podział drzewa rozdziela klasy:
 
-tbd wzory na CRE, Gini, Cross entropy
+-   entropia krzyżowa (ang. *cross-entropy* lub *deviance*):
+
+    $$
+    L(p) =- p \ln p - (1 - p) \ln (1 - p)
+    $$
+
+-   współczynnik Giniego:
+
+    $$
+    L(p) = 2 p (1- p)
+    $$
+
+-   błąd klasyfikacji (ang. *misclassification error*)
+
+    $$
+    L(p) = 1 - \max(p, 1 - p)
+    $$
+
+```{r}
+error_deviance = function(p) -p * log(p) - (1 - p) * log(1 - p)
+error_gini = function(p) 2 * p * (1 - p)
+error_misclass = function(p) 1 - max(p, 1 - p)
+
+
+errors_df = tibble(
+  p = seq(0, 1, by = 0.001)
+) %>%
+  rowwise() %>%
+  mutate(
+    Deviance = error_deviance(p)
+    , Gini = error_gini(p)
+    , Misclass = error_misclass(p)
+  ) %>%
+  pivot_longer(
+    cols = 2:4
+    , names_to = 'Error'
+    , values_to = 'Value'
+  )
+
+ggplot(errors_df, aes(x = p, y = Value)) +
+  geom_point(aes(color = Error), size = 1)
+```
 
 ### Krok 1: Przygotowanie danych
 
@@ -41,35 +80,43 @@ df_test = df[-train_index, ]
 
 ### Krok 2: Trenowanie modelu
 
-W metodzie *rpart*, która jest jedną z implementacji drzew decyzyjnych, mamy kilka hiperparametrów, które możemy kontrolować:
+W metodzie `rpart`, która jest jedną z implementacji drzew decyzyjnych, mamy kilka hiperparametrów, które możemy kontrolować:
 
 -   *cp (complexity parameter)* - podział drzewa, tzn. jeśli ten nie zmniejszy błędu dopasowania o zadany procent, to podział nie jest dokonywany
 
 -   *maxdepth* - maksymalna głębokość drzewa (początkowy węzeł liczymy jako 0)
 
--   *minsplit* - minimalna ilość obserwacji jaka musi istnieć w poszczególnych węzłach
+-   *minsplit* - minimalna ilość obserwacji jaka musi istnieć w danym węźle aby doszło do podziału
 
 -   *minbucket* - minimalna ilość obserwacji jaka musić istnieć w węzłach końcowych
 
 -   *xval* - ilość walidacji krzyżowych.
 
-Ponadto w *rpart* możemy wybrać czy podział ma być wykonany na podstawie indeksu Giniego czy na podstawie TBD
+Ponadto w *rpart* możemy wybrać czy podział ma być wykonany na podstawie indeksu Giniego czy na podstawie entropii krzyżowej.
 
 ```{r}
 model_1 = rpart(
   quality ~ .
   , data = df_train
-  , minsplit = 100
+  # , minsplit = 100
   , minbucket = 10
-  , cp = 0.01
+  # , cp = 0.01
   , xval = 1
-  , parms = list(split = 'gini')
+  , parms = list(split = 'information')
 )
 # parms = list(split = 'information or gini')
-# Duza roznica miedzy information a gini !!!
 summary(model_1)
 
 rpart.plot(model_1, type = 4)
+```
+
+Duże drzewo, tzn. takie z dużą ilością węzłów końcowych może prowadzić do przetrenowania modelu (małe obciążenie na zbiorze treningowym, duża wariancja). Z kolei małe drzewo może nie mieć żadnej mocy prognostycznej. Rozmiar drzewa jest zatem hiperparametrem, który powinnismy zoptymalizować.
+
+W praktyce najpierw budujemy duże drzewo, a potem je przycinamy (ang. *tree-pruning*).
+
+```{r}
+model_2 = rpart::prune.rpart(model_1, cp = 0.1)
+rpart.plot(model_2, type = 4)
 ```
 
 ### Krok 3: Prognozowanie i ocena modelu
@@ -91,6 +138,59 @@ confusionMatrix(
 )
 ```
 
+### Interpretacja zmiennych objaśniających
+
+```{r}
+vip(model_1)
+partial(model_1, 'alcohol') %>% autoplot()
+```
+
+### Biblioteka caret
+
+Biblioteka `caret` zapewnia infrastrukturę to optymalizacji hiperparametrów w wielu algorytmach uczenia maszynowego. Spróbujmy zatem zbudować las losowy, dobierając parametr `mtry`, tak aby uzyskać jak największą wartość *accuracy* na zbiorze testowym.
+
+W funkcji `trainControl` definiujemy metodę (w tym wypadku będzie to walidacja krzyżowa).
+
+```{r}
+control = trainControl(
+  method = 'cv'
+  , number = 5
+)
+```
+
+W funkcji `train` oprócz formułki i zbioru danych podajemy następujące argumenty:
+
+-   `method` - jaki algorytm uczenia maszynowego chcemy zastosować. List obsługiwanych algorytmów przez bibliotekę `caret`: <https://topepo.github.io/caret/train-models-by-tag.html>
+
+-   `metric` - jaką miarę dopasowania chcemy zoptymalizować
+
+-   `tuneLength` lub `tuneGrid` - siatka hiperparametrów do optymalizacji
+
+-   `trControl` - metoda optymalizacji hiperparametrów
+
+```{r}
+set.seed(213)
+model_3 = caret::train(
+  quality ~ .
+  , data = df_train
+  , method = 'rpart'
+  , tuneLength = 20
+  , trControl = trainControl(method = 'cv', number = 5)
+  , control = rpart.control(maxdepth = 2)
+)
+
+ggplot(model_3)
+```
+
+### Zadania
+
+1.  Wczytaj zbiór danych `baseball.csv`. Dopasuj model regresji liniowe oraz drzewo regresyjne. Który model lepiej dopasowuje się do danych?
+2.  Wykonaj wykres 3D, aby zobaczyć jak wyglądają modele z zadania 1. Można użyć biblioteki `plotly`.
+3.  Wczytaj zbiór danych `kc_house_data.csv`. Usuń niepotrzebne zmienne.
+4.  Podziel dane na zbiór treningowy, walidacyjny oraz testowy (jeśli możliwe to wykorzystaj ten sam podział jaki był wykorzystany w zadaniu 2 z regresji liniowej, co pozwoli porównać wyniki :) )
+5.  Znajdź optymalne parametry drzewa decyzyjnego, aby zminimalizować błąd prognozy na zbiorze walidacyjnym.
+6.  Dokonaj finalnej oceny modelu na zbiorze testowym.
+
 ## Bagging
 
 Drzewa losowe cechują się dużą wariancją, tzn. niewielka zmiana w danych lub niewielka zmiana parametrów modelu może sprawić, że struktura drzewa będzie wyglądać zupełnie inaczej. Aby ustabilizować wariancję, możemy zastosować procedurę *bootstrap aggregating*:
@@ -104,7 +204,7 @@ Drzewa losowe cechują się dużą wariancją, tzn. niewielka zmiana w danych lu
 4.  Uśredniamy prognozy.
 
 ```{r}
-model_2 = bagging( 
+model_2 = ipred::bagging( 
   quality ~ .
   , data = df_train
   , nbagg = 100
@@ -118,9 +218,10 @@ model_2 = bagging(
   , parms = list(split = 'gini')
 )
 
-# summary(model_2) # don't run
 model_2
 ```
+
+Błąd *out-of-bag* możemy potraktować jako wbudowany mechanizm oszacowania błędu na zbiorze walidacyjnym.
 
 ```{r}
 y = df_test$quality
@@ -212,7 +313,7 @@ for (b in 1:B) {
 
 W bibliotece `randomForest` mamy poprawną oraz efektywną implementację tej procedury. Główne hiperparametry w lasach losowych to:
 
--    `mtry` - ilość zmiennych objaśniających wybieranych w sposób losowy przy każdym podziale drzewa
+-   `mtry` - ilość zmiennych objaśniających wybieranych w sposób losowy przy każdym podziale drzewa
 
 -   `ntree` - ilość drzew w lesie :)
 
@@ -226,8 +327,6 @@ model_3 = randomForest(
 
 model_3
 ```
-
-TBD wyjaśnić błąd OOB
 
 ```{r}
 y = df_test$quality
@@ -246,50 +345,41 @@ confusionMatrix(
 )
 ```
 
-### Optymalizacja hiperparametrów
+### Zadania
 
-Biblioteka `caret` zapewnia infrastrukturę to optymalizacji hiperparametrów w wielu algorytmach uczenia maszynowego. Spróbujmy zatem zbudować las losowy, dobierając parametr `mtry`, tak aby uzyskać jak największą wartość *accuracy* na zbiorze testowym.
+1.  Do danych `kc_house_data` znajdź optymalne parametry `mtry` oraz `ntree`. Aby przyszpieszyć obliczenia można skorzystać z funkcji `foreach`.
+2.  Jak zmienia się błąd OOB w zależności od różnych wartości parametrów `mtry` oraz `ntree`?
+3.  Jak wygląda las losowy w 3D dla danych `baseball.csv`?
 
-W funkcji `trainControl` definiujemy metodę (w tym wypadku będzie to walidacja krzyżowa).
+## Boosting
 
-```{r}
-control = trainControl(
-  method = 'cv'
-  , number = 5
-)
-```
+*Bagging* jest algorytmem równoległym, tzn. trenujemy wiele modeli niezaleznie, a następnie uśredniamy wyniki. W przeciwieństwie do *baggingu*, mamy dużo algorytmów sekwencyjnych, znanych pod nazwą *boosting*. Tu równiez budujemy pewną ilość podobnych modeli, ale każdy kolejny model jest w pewien sposób zależny od poprzedniego. Najpopularniejsze algorytmy to **AdaBoost** (od *Adaptive Boosting*) oraz **XGBoost** (od *eXtreme Gradient Boosting*).
 
-W funkcji `train` oprócz formułki i zbioru danych podajemy następujące argumenty:
+### Adaboost
 
--   `method` - jaki algorytm uczenia maszynowego chcemy zastosować. List obsługiwanych algorytmów przez bibliotekę `caret`: <https://topepo.github.io/caret/train-models-by-tag.html>
+Algorytm *Adaboost* w każdej kolejnej iteracji przypisuje duże wagi obserwacjom, które zostały błędnie zaklasyfikowane w poprzedniej iteracji (oraz małe wagi obserwacjom poprawnie zaklasyfikowanym). Przykładowa implementacja algorytmu:
 
--   `metric` - jaką miarę dopasowania chcemy zoptymalizować
-
--   `tuneLength` lub `tuneGrid` - siatka hiperparametrów do optymalizacji
-
--   `trControl` - metoda optymalizacji hiperparametrów
+1.  Każdej obserwacji w zbiorze danych przypisujemy równe wagi.
+2.  Trenujmy model na zbiorze treningowym.
+3.  Liczymy funkcję dopasowania na zbiorze treningowym.
+4.  Zmieniamy wagi poszczególnych obserwacji zależnie od błędów otrzymanych w kroku 3.
+5.  Powtarzamy kroki 2-5 zadaną ilość razy (lub gdy jakość prognoz przestanie się poprawiać).
+6.  Prognozujemy na zbiorze testowym.
 
 ```{r}
-model_4 = train(
+model_5 = train(
   quality ~.
   , data = df_train
-  , method = 'rf'
+  , method = 'ada'
   , metric = 'Accuracy'
-  , tuneLength = 11
+  , tuneLength = 2
   , trControl = control
+  , verbose = TRUE
 )
 
 model_4
 ```
 
-Wizualizacja dopasowania modelu w zależności od parametru `mtry`:
+### XGBoost
 
-```{r}
-plot(model_4)
-```
-
-### Zadania
-
-1.  Zbuduj drzewo regresyjne na zbiorze danych `kc_house_data.csv`.
-2.  Zbuduj las losowy na zbiorze danych `kc_house_data.csv`.
-3.  Porównaj wyniki z regresją liniową.
+Algorytm ten działa podobnie do *Adaboost*, ale stosuje bardziej zaawansowane techniki optymalizacyjne
