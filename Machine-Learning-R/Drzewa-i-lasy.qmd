@@ -18,6 +18,8 @@ Algorytm tworzenia drzewa decyzyjnego działa następująco:
 2.  Z kroku pierwszego otrzymaliśmy dwa zbiory tzn. obserwacje dla których $x_j > t$ oraz $x_j \leq t$.
 3.  W każdym z tych zbiorów powtarzamy procedurę z kroku pierwszego otrzymując kolejne podzbiory. Całość powtarzamy, aż wszystkie podzbiory końcowe mają z góry zadaną ilość obserwacji.
 
+![](images/cart.gif){fig-align="center"}
+
 Jak wybrać *najlepszą* klasyfikację zbioru treningowego? Oznaczmy $p$ proporcję obserwacji z klasy $1$ w danym węźle drzewa decyzyjnego. Wówczas $1-p$ będzie oznaczało proporcję obserwacji z klasy $0$ w tym samym węźle. Możemy zastosować kilka metryk oceniających jak dobrze dany podział drzewa rozdziela klasy:
 
 -   entropia krzyżowa (ang. *cross-entropy* lub *deviance*):
